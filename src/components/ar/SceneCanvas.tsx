@@ -4,7 +4,7 @@ import { useMemo, useRef, useState, useEffect } from 'react';
 import * as THREE from 'three';
 import { buildObject } from '@/lib/ar/scene';
 import type { SceneObject } from '@/lib/ar/projects';
-function Item({object,selected,mode,onSelect,onChange}: {object:SceneObject;selected:boolean;mode:'translate'|'rotate'|'scale';onSelect?:()=>void;onChange?:(o:SceneObject)=>void}){
+function Item({object,selected,mode,onSelect,onChange}: {object:SceneObject;selected:boolean;mode:'translate'|'rotate'|'scale';onSelect?:(()=>void)|undefined;onChange?:((o:SceneObject)=>void)|undefined}){
  const [model,setModel]=useState<THREE.Object3D>();const ref=useRef<THREE.Group>(null);
  useEffect(()=>{let alive=true;let built:THREE.Object3D|undefined;buildObject({...object,position:[0,0,0],rotation:[0,0,0],scale:[1,1,1]}).then(m=>{built=m;if(alive)setModel(m);}).catch(console.error);return()=>{alive=false;built?.traverse(o=>{if(o instanceof THREE.Mesh){o.geometry.dispose();for(const mat of Array.isArray(o.material)?o.material:[o.material])mat.dispose();}});};},[object.kind,object.model,object.color,object.roughness,object.metalness]);
  const content=<group ref={ref} position={object.position} rotation={object.rotation} scale={object.scale} visible={object.visible} onClick={e=>{e.stopPropagation();onSelect?.();}}>{model&&<primitive object={model}/>}</group>;
