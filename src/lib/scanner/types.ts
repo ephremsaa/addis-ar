@@ -190,3 +190,9 @@ export const SCAN_STEPS: AngleStep[] = [
     stageName: 'top',
   },
 ];
+
+export type {
+  QualityReport,
+  OverallQualityStatus,
+  ReconstructionMetrics,
+} from './quality-report';

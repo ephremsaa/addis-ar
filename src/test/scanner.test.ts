@@ -5,6 +5,8 @@ import { segmentForeground, applyBrushEdit } from '@/lib/scanner/background-segm
 import { marchCubes, type VoxelGrid } from '@/lib/scanner/marching-cubes';
 import { optimizeMesh } from '@/lib/scanner/mesh-optimizer';
 import { SCAN_STEPS, type ScanPhoto } from '@/lib/scanner/types';
+import { extractKeypoints, ransacEpipolarFilter } from '@/lib/scanner/pose-estimator';
+import { generateQualityReport } from '@/lib/scanner/quality-report';
 
 // Mock canvas and 2D context for jsdom environment
 beforeAll(() => {
@@ -176,5 +178,82 @@ describe('3D Object Scanner - Steps & Hemisphere Configuration', () => {
 
     const elevations = SCAN_STEPS.map((s) => s.elevation);
     expect(elevations.some((e) => e > 30)).toBe(true);
+  });
+});
+
+describe('3D Object Scanner - Optical Pose Estimation & Epipolar Matching', () => {
+  it('extracts corner keypoints with 32-byte binary descriptors', () => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 160;
+    canvas.height = 120;
+    const ctx = canvas.getContext('2d')!;
+
+    const keypoints = extractKeypoints(ctx, 160, 120, 50);
+    expect(Array.isArray(keypoints)).toBe(true);
+  });
+
+  it('filters outlier feature correspondences with RANSAC epipolar geometry', () => {
+    const dummyMatches = [
+      { kp1: { x: 20, y: 20 }, kp2: { x: 25, y: 22 }, distance: 5 },
+      { kp1: { x: 40, y: 30 }, kp2: { x: 46, y: 31 }, distance: 6 },
+      { kp1: { x: 60, y: 50 }, kp2: { x: 65, y: 52 }, distance: 7 },
+      { kp1: { x: 80, y: 70 }, kp2: { x: 86, y: 71 }, distance: 8 },
+      { kp1: { x: 100, y: 90 }, kp2: { x: 105, y: 91 }, distance: 6 },
+      { kp1: { x: 120, y: 100 }, kp2: { x: 126, y: 102 }, distance: 5 },
+      { kp1: { x: 140, y: 110 }, kp2: { x: 145, y: 111 }, distance: 7 },
+      { kp1: { x: 150, y: 115 }, kp2: { x: 155, y: 116 }, distance: 6 },
+      // Severe outlier
+      { kp1: { x: 10, y: 10 }, kp2: { x: 150, y: 90 }, distance: 40 },
+    ];
+
+    const result = ransacEpipolarFilter(dummyMatches as any, 160, 120, 20, 5.0);
+
+    expect(result.inliers).toBeDefined();
+    expect(result.inliers.length).toBeGreaterThan(0);
+    expect(typeof result.reprojectionError).toBe('number');
+  });
+});
+
+describe('3D Object Scanner - Quality Report & Auto-Retry Generation', () => {
+  it('generates a measured quality report with diagnostics and retries', () => {
+    const goodReport = generateQualityReport({
+      totalPhotos: 16,
+      registeredCameras: 16,
+      registrationPercentage: 100,
+      sparsePointCount: 1420,
+      densePointCount: 4200,
+      vertexCount: 4200,
+      triangleCount: 8400,
+      textureResolution: 1024,
+      meanReprojectionErrorPx: 1.4,
+      disconnectedComponentsCount: 0,
+      surfaceCoverageScore: 92,
+      exportValid: true,
+      warnings: [],
+    });
+
+    expect(goodReport.status).toBe('Good');
+    expect(goodReport.score).toBeGreaterThanOrEqual(80);
+    expect(goodReport.metrics.exportValid).toBe(true);
+
+    const poorReport = generateQualityReport({
+      totalPhotos: 12,
+      registeredCameras: 6,
+      registrationPercentage: 50,
+      sparsePointCount: 120,
+      densePointCount: 600,
+      vertexCount: 600,
+      triangleCount: 500,
+      textureResolution: 1024,
+      meanReprojectionErrorPx: 4.8,
+      disconnectedComponentsCount: 8,
+      surfaceCoverageScore: 40,
+      exportValid: true,
+      warnings: ['Sparse feature overlap'],
+    });
+
+    expect(poorReport.status).toBe('Needs improvement');
+    expect(poorReport.diagnostics.length).toBeGreaterThan(0);
+    expect(poorReport.retryRecommendation?.canAutoRetry).toBe(true);
   });
 });

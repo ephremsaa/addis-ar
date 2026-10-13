@@ -36,6 +36,7 @@ import { reconstruct3DModel, type ReconstructionResult } from '@/lib/scanner/rec
 import { HemisphereDiagram } from './HemisphereDiagram';
 import { MaskTouchupModal } from './MaskTouchupModal';
 import { ModelViewer3D } from './ModelViewer3D';
+import { QualityReportModal } from './QualityReportModal';
 import { newProject, newObject, saveProject, type Project } from '@/lib/ar/projects';
 
 interface ScannerWorkspaceProps {
@@ -71,6 +72,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     message: '',
   });
   const [reconstructionResult, setReconstructionResult] = useState<ReconstructionResult | null>(null);
+  const [showQualityReport, setShowQualityReport] = useState<boolean>(false);
 
   // Settings & Modals
   const [showServerModal, setShowServerModal] = useState<boolean>(false);
@@ -281,8 +283,10 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     setPhotos((prev) => prev.filter((p) => p.id !== id));
   };
 
-  // Start 3D Reconstruction
-  const startReconstruction = async () => {
+  // Start 3D Reconstruction with optional retry strategy
+  const startReconstruction = async (
+    retryStrategy?: 'filter-blurry' | 'relax-features' | 'conservative-carving' | 'recompute-textures'
+  ) => {
     if (photos.length < 3) return;
 
     setReconstructionStage({
@@ -298,10 +302,12 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         undefined,
         (info) => {
           setReconstructionStage(info);
-        }
+        },
+        retryStrategy
       );
 
       setReconstructionResult(result);
+      setShowQualityReport(true);
     } catch (err: any) {
       setReconstructionStage({
         stage: 'failed',
@@ -395,6 +401,15 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowQualityReport(true)}
+              className="text-xs gap-1.5 border-purple-500/40 text-purple-300 hover:bg-purple-950/40"
+            >
+              <ShieldCheck className="w-3.5 h-3.5 text-purple-400" />
+              Quality Report
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => {
                 setReconstructionResult(null);
                 setPhotos([]);
@@ -421,6 +436,20 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             onOpenInAR={handleOpenInAR}
           />
         </div>
+
+        {/* Reconstruction Quality Report Modal */}
+        {showQualityReport && reconstructionResult.qualityReport && (
+          <QualityReportModal
+            report={reconstructionResult.qualityReport}
+            isOpen={showQualityReport}
+            onClose={() => setShowQualityReport(false)}
+            onContinue={() => setShowQualityReport(false)}
+            onRetry={(strategy) => {
+              setShowQualityReport(false);
+              startReconstruction(strategy);
+            }}
+          />
+        )}
       </div>
     );
   }

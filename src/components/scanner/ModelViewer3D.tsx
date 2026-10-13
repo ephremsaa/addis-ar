@@ -217,7 +217,7 @@ export function ModelViewer3D({
     controls.update();
   };
 
-  // Generate binary GLB from current configured mesh
+  // Generate binary GLB from current configured mesh with glTF 2.0 validation
   const generateCurrentGLB = async (): Promise<{ blob: Blob; dataUrl: string }> => {
     if (!meshRef.current) throw new Error('No mesh available to export');
 
@@ -228,7 +228,13 @@ export function ModelViewer3D({
     const buffer = await exporter.parseAsync(scene, { binary: true });
 
     if (!(buffer instanceof ArrayBuffer)) {
-      throw new Error('GLB export failed');
+      throw new Error('GLB export failed: Exporter did not return binary data.');
+    }
+
+    // Validate glTF 2.0 binary magic header ("glTF" -> 0x46546C67)
+    const headerView = new DataView(buffer);
+    if (headerView.byteLength < 12 || headerView.getUint32(0, true) !== 0x46546c67) {
+      throw new Error('GLB export validation failed: Corrupted glTF 2.0 binary container.');
     }
 
     const blob = new Blob([buffer], { type: 'model/gltf-binary' });
@@ -476,7 +482,41 @@ export function ModelViewer3D({
             />
           </div>
 
-          {/* Decimation / Polygon reduction */}
+          {/* Export Quality Levels: HIGH QUALITY, BALANCED, LIGHTWEIGHT */}
+          <div className="space-y-1.5">
+            <label className="text-xs font-medium text-foreground">Export Quality Level</label>
+            <div className="grid grid-cols-3 gap-1 bg-background/60 p-1 rounded-lg border border-border/40">
+              <Button
+                size="sm"
+                variant={cleanupOptions.decimationRatio >= 0.95 ? 'secondary' : 'ghost'}
+                className="h-7 text-[10px] px-1"
+                onClick={() => setCleanupOptions((s) => ({ ...s, decimationRatio: 1.0 }))}
+                title="Preserve full geometric and texture detail"
+              >
+                High Quality
+              </Button>
+              <Button
+                size="sm"
+                variant={cleanupOptions.decimationRatio >= 0.65 && cleanupOptions.decimationRatio < 0.95 ? 'secondary' : 'ghost'}
+                className="h-7 text-[10px] px-1"
+                onClick={() => setCleanupOptions((s) => ({ ...s, decimationRatio: 0.75 }))}
+                title="Optimized for typical real-time AR use"
+              >
+                Balanced
+              </Button>
+              <Button
+                size="sm"
+                variant={cleanupOptions.decimationRatio < 0.65 ? 'secondary' : 'ghost'}
+                className="h-7 text-[10px] px-1"
+                onClick={() => setCleanupOptions((s) => ({ ...s, decimationRatio: 0.4 }))}
+                title="Reduced polygon and texture sizes for mobile performance"
+              >
+                Lightweight
+              </Button>
+            </div>
+          </div>
+
+          {/* Decimation / Polygon reduction slider */}
           <div className="space-y-1.5">
             <div className="flex justify-between text-xs">
               <span className="font-medium text-foreground">Mesh Detail (Decimation)</span>
@@ -499,7 +539,7 @@ export function ModelViewer3D({
               className="w-full accent-primary"
             />
             <p className="text-[10px] text-muted-foreground">
-              Lower detail simplifies polygon count for faster mobile WebAR rendering.
+              Adjust mesh density while preserving original high-quality scan data.
             </p>
           </div>
         </div>
