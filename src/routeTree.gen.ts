@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as ArRouteImport } from './routes/ar'
 import { Route as DocsRouteImport } from './routes/docs'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WelcomeRouteImport } from './routes/welcome'
@@ -18,6 +19,11 @@ import { Route as EditorProjectIdRouteImport } from './routes/editor.$projectId'
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ArRoute = ArRouteImport.update({
+  id: '/ar',
+  path: '/ar',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DocsRoute = DocsRouteImport.update({
@@ -43,6 +49,7 @@ const EditorProjectIdRoute = EditorProjectIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ar': typeof ArRoute
   '/docs': typeof DocsRoute
   '/templates': typeof TemplatesRoute
   '/welcome': typeof WelcomeRoute
@@ -50,6 +57,7 @@ export interface FileRoutesByFullPath {
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ar': typeof ArRoute
   '/docs': typeof DocsRoute
   '/templates': typeof TemplatesRoute
   '/welcome': typeof WelcomeRoute
@@ -58,6 +66,7 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ar': typeof ArRoute
   '/docs': typeof DocsRoute
   '/templates': typeof TemplatesRoute
   '/welcome': typeof WelcomeRoute
@@ -65,12 +74,14 @@ export interface FileRoutesById {
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/docs' | '/templates' | '/welcome' | '/editor/$projectId'
+  fullPaths:
+    '/' | '/ar' | '/docs' | '/templates' | '/welcome' | '/editor/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/docs' | '/templates' | '/welcome' | '/editor/$projectId'
+  to: '/' | '/ar' | '/docs' | '/templates' | '/welcome' | '/editor/$projectId'
   id:
     | '__root__'
     | '/'
+    | '/ar'
     | '/docs'
     | '/templates'
     | '/welcome'
@@ -79,6 +90,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  ArRoute: typeof ArRoute
   DocsRoute: typeof DocsRoute
   TemplatesRoute: typeof TemplatesRoute
   WelcomeRoute: typeof WelcomeRoute
@@ -92,6 +104,13 @@ declare module '@tanstack/react-router' {
       path: '/'
       fullPath: '/'
       preLoaderRoute: typeof IndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/ar': {
+      id: '/ar'
+      path: '/ar'
+      fullPath: '/ar'
+      preLoaderRoute: typeof ArRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/docs': {
@@ -127,6 +146,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  ArRoute: ArRoute,
   DocsRoute: DocsRoute,
   TemplatesRoute: TemplatesRoute,
   WelcomeRoute: WelcomeRoute,

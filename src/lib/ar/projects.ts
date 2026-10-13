@@ -3,7 +3,18 @@ import { z } from 'zod';
 export const kinds = ['cube','sphere','cylinder','cone','plane','torus','capsule','model'] as const;
 const vector = z.tuple([z.number().finite(),z.number().finite(),z.number().finite()]);
 export const objectSchema = z.object({id:z.string(),name:z.string().max(120),kind:z.enum(kinds),position:vector,rotation:vector,scale:vector,color:z.string().regex(/^#[0-9a-fA-F]{6}$/),roughness:z.number().min(0).max(1),metalness:z.number().min(0).max(1),visible:z.boolean(),locked:z.boolean(),model:z.string().optional()});
-export const projectSchema = z.object({version:z.literal(1),id:z.string(),name:z.string().min(1).max(120),updated:z.number(),created:z.number(),objects:z.array(objectSchema)});
+export const trackingModes = ['focus-target', 'marker', 'webxr-plane', 'device-orientation'] as const;
+export type TrackingMode = typeof trackingModes[number];
+export const arConfigSchema = z.object({
+  trackingMode: z.enum(trackingModes).default('focus-target'),
+  confidenceThreshold: z.number().min(0).max(1).default(0.4),
+  smoothingFactor: z.number().min(0).max(1).default(0.4),
+  targetSnapshot: z.string().optional(),
+  targetLabel: z.string().optional(),
+  lockedTarget: z.boolean().default(false),
+}).optional();
+export type ARConfig = z.infer<typeof arConfigSchema>;
+export const projectSchema = z.object({version:z.literal(1),id:z.string(),name:z.string().min(1).max(120),updated:z.number(),created:z.number(),objects:z.array(objectSchema),arConfig:arConfigSchema});
 export type SceneObject=z.infer<typeof objectSchema>;
 export type Project=z.infer<typeof projectSchema>;
 export const palette=['#9682ed','#58ced7','#eaaf71','#f0f0f4','#ec7998','#84cba1'] as const;
