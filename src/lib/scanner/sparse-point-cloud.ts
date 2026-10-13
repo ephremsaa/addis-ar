@@ -78,17 +78,17 @@ export function triangulatePoint(
   const s = (b * e - c * d) / denom;
   const t = (a * e - b * d) / denom;
 
-  // Rays must point forward from both camera centers
-  if (s <= 0.1 || t <= 0.1 || s > 6.0 || t > 6.0) {
+  // Rays must point forward from both camera centers toward the tabletop object
+  if (s <= 0.05 || t <= 0.05 || s > 1.8 || t > 1.8) {
     return null;
   }
 
   const ptOnRay1 = new THREE.Vector3().copy(p1).addScaledVector(d1, s);
   const ptOnRay2 = new THREE.Vector3().copy(p2).addScaledVector(d2, t);
 
-  // Segment length is ray discrepancy
+  // Segment length is ray discrepancy (distance between rays at closest approach)
   const rayDistance = ptOnRay1.distanceTo(ptOnRay2);
-  if (rayDistance > 0.45) {
+  if (rayDistance > 0.14) {
     // Excessive triangulation baseline error
     return null;
   }

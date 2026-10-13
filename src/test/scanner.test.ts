@@ -293,5 +293,45 @@ describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
     expect(report.spikeTrianglesRemoved).toBeGreaterThanOrEqual(1);
     expect(cleaned.getAttribute('position').count).toBe(3); // Only the 1 normal triangle survives
   });
+
+  it('calibrates camera poses with mathematically correct inverted view matrices and translations', async () => {
+    const { estimateMultiViewCameraPoses } = await import('@/lib/scanner/pose-estimator');
+
+    const mockPhotos: any[] = [];
+    for (let i = 0; i < 12; i++) {
+      mockPhotos.push({
+        id: `photo-${i}`,
+        dataUrl: 'data:image/png;base64,mock',
+        thumbnailUrl: 'data:image/png;base64,mock',
+        timestamp: Date.now(),
+        angleGroup: 'front',
+        azimuth: (i / 12) * 360,
+        elevation: 35,
+        maskDataUrl: 'data:image/png;base64,mock',
+        isSegmented: true,
+        quality: { blurScore: 80, isBlurry: false, brightness: 120, isUnderExposed: false, isOverExposed: false, featureCount: 100, hasSufficientFeatures: true, overallScore: 85, warnings: [] },
+      });
+    }
+
+    const summary = await estimateMultiViewCameraPoses(mockPhotos);
+
+    expect(summary.poses.length).toBe(12);
+    // Verify each camera has a real 3D position and non-zero translation in its inverted view matrix
+    for (const pose of summary.poses) {
+      expect(pose.position.length()).toBeGreaterThan(0.3); // Has real camera distance (~0.52m)
+      // Elements 12, 13, 14 of matrixWorldInverse (viewMatrix) should contain camera translation
+      const viewElems = pose.viewMatrix.elements;
+      const hasTranslation = Math.abs(viewElems[12]) + Math.abs(viewElems[13]) + Math.abs(viewElems[14]) > 0.1;
+      expect(hasTranslation).toBe(true);
+
+      // Verify that the origin point (0, 0, 0) projects into the center of the camera view without NaN
+      const originProj = new THREE.Vector3(0, 0, 0).applyMatrix4(pose.viewProjMatrix);
+      expect(Number.isFinite(originProj.x)).toBe(true);
+      expect(Number.isFinite(originProj.y)).toBe(true);
+      expect(Number.isFinite(originProj.z)).toBe(true);
+      expect(Math.abs(originProj.x)).toBeLessThan(0.3);
+      expect(Math.abs(originProj.y)).toBeLessThan(0.3);
+    }
+  });
 });
 

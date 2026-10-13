@@ -1,12 +1,13 @@
 import * as THREE from 'three';
 import type { ModelCleanupOptions } from './types';
+import { cleanReconstructedMesh } from './mesh-cleaner';
 
 /**
  * Optimizes and cleans up reconstructed 3D mesh:
  * - Centers geometry to world origin.
  * - Aligns origin to bottom-center, center, or top.
  * - Applies user scale and rotation.
- * - Filters out floating disconnected debris clusters.
+ * - Filters out floating disconnected debris clusters using graph topology.
  * - Decimates polygon count if requested.
  */
 export function optimizeMesh(
@@ -15,9 +16,9 @@ export function optimizeMesh(
 ): THREE.BufferGeometry {
   let geo = geometry.clone();
 
-  // 1. Remove disconnected floating debris if requested
+  // 1. Remove disconnected floating debris via genuine topological connectivity
   if (options.removeDisconnectedDebris) {
-    geo = removeFloatingIslands(geo);
+    geo = cleanReconstructedMesh(geo).geometry;
   }
 
   // 2. Decimation (vertex clustering simplification) if ratio < 1

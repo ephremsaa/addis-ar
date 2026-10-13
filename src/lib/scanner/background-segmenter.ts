@@ -32,24 +32,23 @@ export async function segmentForeground(
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
 
-  // 1. Sample border background pixels (top, bottom, left, right outer bands)
-  const borderMarginX = Math.max(2, Math.floor(width * 0.06));
-  const borderMarginY = Math.max(2, Math.floor(height * 0.06));
+  // 1. Sample tabletop background pixels (bottom margin and lower-half lateral borders)
+  // Avoid top margin where background room furniture (chairs, walls) typically appears
+  const borderMarginX = Math.max(3, Math.floor(width * 0.08));
+  const borderMarginY = Math.max(3, Math.floor(height * 0.08));
 
   const bgR: number[] = [];
   const bgG: number[] = [];
   const bgB: number[] = [];
 
-  for (let y = 0; y < height; y++) {
+  for (let y = Math.floor(height * 0.25); y < height; y++) {
     for (let x = 0; x < width; x++) {
       if (
         x < borderMarginX ||
         x >= width - borderMarginX ||
-        y < borderMarginY ||
         y >= height - borderMarginY
       ) {
-        // Step to keep sample size manageable
-        if ((x + y) % 4 === 0) {
+        if ((x + y) % 3 === 0) {
           const idx = (y * width + x) * 4;
           bgR.push(data[idx]);
           bgG.push(data[idx + 1]);
@@ -59,23 +58,14 @@ export async function segmentForeground(
     }
   }
 
-  // Calculate background color statistics (mean and variance)
+  // Calculate robust background color statistics (median-trimmed mean)
   const nBg = bgR.length || 1;
-  const meanR = bgR.reduce((a, b) => a + b, 0) / nBg;
-  const meanG = bgG.reduce((a, b) => a + b, 0) / nBg;
-  const meanB = bgB.reduce((a, b) => a + b, 0) / nBg;
-
-  let varR = 0;
-  let varG = 0;
-  let varB = 0;
-  for (let i = 0; i < nBg; i++) {
-    varR += (bgR[i] - meanR) ** 2;
-    varG += (bgG[i] - meanG) ** 2;
-    varB += (bgB[i] - meanB) ** 2;
-  }
-  const stdR = Math.max(16, Math.sqrt(varR / nBg));
-  const stdG = Math.max(16, Math.sqrt(varG / nBg));
-  const stdB = Math.max(16, Math.sqrt(varB / nBg));
+  const sortedR = [...bgR].sort((a, b) => a - b);
+  const sortedG = [...bgG].sort((a, b) => a - b);
+  const sortedB = [...bgB].sort((a, b) => a - b);
+  const medianR = sortedR[Math.floor(nBg * 0.5)] || 180;
+  const medianG = sortedG[Math.floor(nBg * 0.5)] || 140;
+  const medianB = sortedB[Math.floor(nBg * 0.5)] || 100;
 
   // Compute local gradient magnitude (Sobel-inspired) to capture high-frequency texture (zipper, stitching)
   const grad = new Float32Array(width * height);
@@ -97,10 +87,10 @@ export async function segmentForeground(
     }
   }
 
-  // 2. Compute probability mask for each pixel with dark object protection
+  // 2. Strict foreground mask: Tabletop blanket color is strictly rejected
   const mask = new Uint8Array(width * height);
   const centerX = width / 2;
-  const centerY = height / 2;
+  const centerY = height * 0.54; // Objects on tables rest slightly below optical center
   const maxDist = Math.hypot(centerX, centerY);
 
   let foregroundCount = 0;
@@ -111,28 +101,36 @@ export async function segmentForeground(
       const r = data[idx];
       const g = data[idx + 1];
       const b = data[idx + 2];
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
-      // Normalized color difference from background model
-      const diffR = (r - meanR) / stdR;
-      const diffG = (g - meanG) / stdG;
-      const diffB = (b - meanB) / stdB;
-      const colorDist = Math.sqrt(diffR * diffR + diffG * diffG + diffB * diffB);
+      // Color distance from the tabletop blanket surface
+      const colorDist = Math.hypot(r - medianR, g - medianG, b - medianB);
 
-      // Distance from center
+      // Distance from object center
       const distFromCenter = Math.hypot(x - centerX, y - centerY);
-      const centerFactor = 1.0 - Math.min(1.0, (distFromCenter / maxDist) * 1.05);
+      const isWithinObjectRadius = distFromCenter < maxDist * 0.74;
 
-      // Texture gradient boost (crucial for textured black cases with zippers)
-      const textureBoost = Math.min(1.8, grad[y * width + x] / 24.0);
+      // Exclude top-border background furniture (chairs, room background)
+      const isNotTopBackground = y > Math.floor(height * 0.12);
 
-      // Saliency score: combination of color distinctiveness, texture presence, and spatial centrality
-      const saliency = colorDist * 0.7 + textureBoost * 0.9 + centerFactor * 1.4;
+      // Blanket rejection: if color matches the tabletop blanket (dE < 42), it is definitively background
+      const isBlanketSurface = colorDist < 42;
 
-      // Dark object protection: central dark pixels with texture/edges are recognized as foreground
-      const isDarkCentral = (r + g + b) / 3 < 70 && centerFactor > 0.45 && textureBoost > 0.3;
-      const isForeground = (saliency > 1.25 && colorDist > 0.85) || isDarkCentral;
+      // Dark case identification: low luminance, textured leather, zipper edges, distinctly non-blanket
+      const isDarkCase =
+        lum < 85 &&
+        colorDist > 48 &&
+        isWithinObjectRadius &&
+        isNotTopBackground;
 
-      if (isForeground) {
+      // General foreground object (high contrast or strong gradient edge with non-blanket color)
+      const isGeneralForeground =
+        colorDist > 58 &&
+        !isBlanketSurface &&
+        isWithinObjectRadius &&
+        isNotTopBackground;
+
+      if (isDarkCase || isGeneralForeground) {
         mask[y * width + x] = 255;
         foregroundCount++;
       } else {

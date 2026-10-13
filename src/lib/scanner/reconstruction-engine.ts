@@ -564,17 +564,18 @@ function carveDensePhotometricGrid(
   const nz = resolution;
 
   // Adapt bounding box to actual physical object using triangulated sparse point cloud
-  let minX = -1.0;
-  let minY = -1.0;
-  let minZ = -1.0;
-  let cellSize = 2.0 / resolution;
+  // Default span for tabletop objects (e.g. black zippered case) is ~0.36m centered at origin
+  let minX = -0.18;
+  let minY = -0.18;
+  let minZ = -0.18;
+  let cellSize = 0.36 / resolution;
 
   if (sparsePointCloud && sparsePointCloud.pointCount >= 12) {
     const b = sparsePointCloud.bounds;
-    const spanX = Math.max(0.7, (b.max.x - b.min.x) * 1.3);
-    const spanY = Math.max(0.7, (b.max.y - b.min.y) * 1.3);
-    const spanZ = Math.max(0.7, (b.max.z - b.min.z) * 1.3);
-    const maxSpan = Math.min(2.2, Math.max(spanX, spanY, spanZ));
+    const spanX = Math.max(0.18, (b.max.x - b.min.x) * 1.25);
+    const spanY = Math.max(0.18, (b.max.y - b.min.y) * 1.25);
+    const spanZ = Math.max(0.18, (b.max.z - b.min.z) * 1.25);
+    const maxSpan = Math.min(0.85, Math.max(spanX, spanY, spanZ));
 
     minX = b.center.x - maxSpan / 2;
     minY = b.center.y - maxSpan / 2;

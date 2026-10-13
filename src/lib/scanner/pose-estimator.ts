@@ -408,12 +408,16 @@ export async function estimateMultiViewCameraPoses(
 
     if (hasRepeatingAngles && totalPhotos > 3) {
       resolvedAzimuth = (i / totalPhotos) * 360;
-      resolvedElevation = 15.0; // Default slight top-down perspective for tabletop objects
+      resolvedElevation = 36.0; // Natural handheld downward angle for tabletop objects (~36°)
+    } else if (resolvedElevation < 20.0) {
+      // Tabletop objects (like cases on a desk/blanket) are captured looking downward
+      resolvedElevation = 35.0;
     }
 
     const azRad = (resolvedAzimuth * Math.PI) / 180;
     const elRad = (resolvedElevation * Math.PI) / 180;
-    const cameraRadius = 2.4;
+    // Realistic handheld mobile camera distance for tabletop objects (~52cm)
+    const cameraRadius = 0.52;
 
     let posX = cameraRadius * Math.cos(elRad) * Math.sin(azRad);
     let posY = cameraRadius * Math.sin(elRad);
@@ -432,26 +436,29 @@ export async function estimateMultiViewCameraPoses(
 
       const tangentX = Math.cos(azRad);
       const tangentZ = -Math.sin(azRad);
-      posX += tangentX * meanDx * 0.2;
-      posY -= meanDy * 0.2;
-      posZ += tangentZ * meanDx * 0.2;
+      posX += tangentX * meanDx * 0.08;
+      posY -= meanDy * 0.08;
+      posZ += tangentZ * meanDx * 0.08;
     }
 
     const position = new THREE.Vector3(posX, posY, posZ);
     const target = new THREE.Vector3(0, 0, 0);
     const up = new THREE.Vector3(0, 1, 0);
 
-    const viewMatrix = new THREE.Matrix4().lookAt(position, target, up);
-
     // Standard smartphone vertical FOV (~54 degrees)
     const aspect = curr.img.width / curr.img.height;
     const fov = 54;
-    const top = Math.tan(((fov / 2) * Math.PI) / 180) * 0.1;
-    const bottom = -top;
-    const right = top * aspect;
-    const left = -right;
 
-    const projectionMatrix = new THREE.Matrix4().makePerspective(left, right, top, bottom, 0.1, 15.0);
+    // Use Three.js PerspectiveCamera to compute the genuine inverted view matrix with 3D translation
+    const camObj = new THREE.PerspectiveCamera(fov, aspect, 0.05, 10.0);
+    camObj.position.copy(position);
+    camObj.up.copy(up);
+    camObj.lookAt(target);
+    camObj.updateMatrixWorld(true);
+    camObj.updateProjectionMatrix();
+
+    const viewMatrix = camObj.matrixWorldInverse.clone();
+    const projectionMatrix = camObj.projectionMatrix.clone();
     const viewProjMatrix = new THREE.Matrix4().multiplyMatrices(projectionMatrix, viewMatrix);
 
     poses.push({
