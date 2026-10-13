@@ -573,10 +573,10 @@ function carveDensePhotometricGrid(
 
   if (sparsePointCloud && sparsePointCloud.pointCount >= 12) {
     const b = sparsePointCloud.bounds;
-    const spanX = Math.max(0.18, (b.max.x - b.min.x) * 1.25);
-    const spanY = Math.max(0.18, (b.max.y - b.min.y) * 1.25);
-    const spanZ = Math.max(0.18, (b.max.z - b.min.z) * 1.25);
-    const maxSpan = Math.min(0.85, Math.max(spanX, spanY, spanZ));
+    const spanX = Math.max(0.16, (b.max.x - b.min.x) * 1.15);
+    const spanY = Math.max(0.16, (b.max.y - b.min.y) * 1.15);
+    const spanZ = Math.max(0.16, (b.max.z - b.min.z) * 1.15);
+    const maxSpan = Math.min(0.52, Math.max(spanX, spanY, spanZ));
 
     minX = b.center.x - maxSpan / 2;
     minY = b.center.y - maxSpan / 2;
@@ -613,10 +613,10 @@ function carveDensePhotometricGrid(
   const tempVec = new THREE.Vector3();
   const numPoses = cameraBuffers.length;
 
-  // Consensus threshold:
-  // For 38 cameras, 0.60 allows rounded corners and zippers to be preserved without excessive carving
+  // Strict consensus threshold:
+  // Requires >= 76% consensus among viewing cameras to prevent empty space bridging
   const consensusThreshold =
-    retryStrategy === 'conservative-carving' ? 0.54 : 0.60;
+    retryStrategy === 'conservative-carving' ? 0.70 : 0.76;
 
   for (let z = 0; z < nz; z++) {
     const vz = minZ + z * cellSize;
@@ -687,11 +687,11 @@ function carveDensePhotometricGrid(
         const isPhotometricallyConsistent = colorVariance < 52 || lumCount < 2;
 
         if (
-          evaluatedCount >= 2 &&
+          evaluatedCount >= 3 &&
           occupancyFraction >= consensusThreshold &&
           isPhotometricallyConsistent
         ) {
-          values[index] = occupancyFraction - (consensusThreshold - 0.06);
+          values[index] = occupancyFraction - (consensusThreshold - 0.08);
         } else {
           values[index] = -1.0;
         }

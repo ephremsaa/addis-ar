@@ -140,15 +140,19 @@ export function cleanReconstructedMesh(
     edgeLengths.length > 0 ? (edgeLengths[Math.floor(edgeLengths.length / 2)] ?? 0.05) : 0.05;
 
   // Thresholds derived from local median geometry scale:
-  // Legitimate features (like zipper teeth) have small edge lengths.
-  // Spikes bridging empty space have long edges (> 3.2x median) and high aspect ratios (> 12).
-  const spikeEdgeThreshold = Math.max(0.12, medianEdgeLength * 3.4);
+  // Legitimate features (zipper teeth, seams, rounded edges) have compact edge lengths.
+  // Spikes bridging empty space have long edges (> 2.4x median or > 5.5cm) or extreme aspect ratios (> 6.0).
+  const maxAllowedEdge = Math.min(0.065, Math.max(0.025, medianEdgeLength * 2.4));
   let spikeCount = 0;
 
   for (const tri of triangles) {
     if (tri.isDegenerate) continue;
 
-    if (tri.maxEdge > spikeEdgeThreshold && tri.aspectRatio > 12.0) {
+    const isLongEdge = tri.maxEdge > maxAllowedEdge;
+    const isNeedleSliver = tri.aspectRatio > 6.0;
+    const isExtremeSpike = tri.maxEdge > medianEdgeLength * 3.2;
+
+    if ((isLongEdge && tri.aspectRatio > 4.5) || isNeedleSliver || isExtremeSpike) {
       tri.isSpike = true;
       spikeCount++;
     }

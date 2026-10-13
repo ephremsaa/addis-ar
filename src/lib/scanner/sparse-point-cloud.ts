@@ -74,8 +74,15 @@ export function triangulatePoint(
   const d = d1.dot(w0);
   const e = d2.dot(w0);
 
+  // Parallax angle must be between ~8° and ~76° (cos between 0.24 and 0.990)
+  // Rays that are nearly parallel (cos > 0.990) create massive depth uncertainty and flying outliers
+  const cosAngle = Math.abs(b);
+  if (cosAngle > 0.990 || cosAngle < 0.20) {
+    return null;
+  }
+
   const denom = a * c - b * b;
-  if (Math.abs(denom) < 1e-5) {
+  if (Math.abs(denom) < 1e-4) {
     // Parallel rays
     return null;
   }
@@ -84,7 +91,7 @@ export function triangulatePoint(
   const t = (a * e - b * d) / denom;
 
   // Rays must point forward from both camera centers toward the tabletop object
-  if (s <= 0.05 || t <= 0.05 || s > 1.8 || t > 1.8) {
+  if (s <= 0.12 || t <= 0.12 || s > 0.95 || t > 0.95) {
     return null;
   }
 
@@ -92,9 +99,9 @@ export function triangulatePoint(
   const ptOnRay2 = new THREE.Vector3().copy(p2).addScaledVector(d2, t);
 
   // Segment length is ray discrepancy (distance between rays at closest approach)
+  // Strict 3.5cm tolerance prevents triangulating mismatched features across empty space
   const rayDistance = ptOnRay1.distanceTo(ptOnRay2);
-  if (rayDistance > 0.14) {
-    // Excessive triangulation baseline error
+  if (rayDistance > 0.038) {
     return null;
   }
 
@@ -121,7 +128,7 @@ export function triangulatePoint(
   const err2 = Math.hypot(reprojectedPx2.x - match.kp2.x, reprojectedPx2.y - match.kp2.y);
   const meanErr = (err1 + err2) / 2;
 
-  if (meanErr > 5.0) {
+  if (meanErr > 3.2) {
     // Reject excessive reprojection error
     return null;
   }
@@ -235,9 +242,10 @@ export function generateSparsePointCloud(
 
 /**
  * Statistical distance filtering to discard flying noise particles.
+ * Enforces central cluster bounds and rejects background points.
  */
 function filterStatisticalOutliers(points: SparsePoint[]): SparsePoint[] {
-  if (points.length < 20) return points;
+  if (points.length < 12) return points;
 
   // Compute centroid
   const centroid = new THREE.Vector3();
@@ -255,6 +263,9 @@ function filterStatisticalOutliers(points: SparsePoint[]): SparsePoint[] {
     sumDist += d;
   }
 
+  const sortedDistances = [...distances].sort((a, b) => a - b);
+  const medianDist = sortedDistances[Math.floor(sortedDistances.length / 2)] ?? 0.15;
+
   const meanDist = sumDist / points.length;
   let variance = 0;
   for (const d of distances) {
@@ -262,7 +273,7 @@ function filterStatisticalOutliers(points: SparsePoint[]): SparsePoint[] {
   }
   const stdDist = Math.sqrt(variance / points.length);
 
-  // Keep points within 2.3 standard deviations and within 2.2m of origin
-  const threshold = meanDist + stdDist * 2.3;
-  return points.filter((pt, i) => (distances[i] ?? Infinity) <= threshold && (distances[i] ?? Infinity) <= 2.2);
+  // Tabletop objects (cases, electronics, shoes) cluster within median * 2.2 and <= 0.42m
+  const statisticalThreshold = Math.min(0.42, Math.max(0.18, medianDist * 2.2, meanDist + stdDist * 2.0));
+  return points.filter((pt, i) => (distances[i] ?? Infinity) <= statisticalThreshold);
 }

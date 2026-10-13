@@ -21,6 +21,13 @@ import {
   ShieldCheck,
   Server,
   ArrowLeft,
+  Video,
+  Pause,
+  Square,
+  Compass,
+  Download,
+  Radio,
+  FileText,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +40,14 @@ import {
 import { validateImageQuality } from '@/lib/scanner/image-validator';
 import { segmentForeground } from '@/lib/scanner/background-segmenter';
 import { reconstruct3DModel, type ReconstructionResult } from '@/lib/scanner/reconstruction-engine';
+import {
+  ContinuousScanRecorder,
+  processRecordedFramesToPhotos,
+  exportScanDataset,
+  importScanDataset,
+  type RecordingGuidance,
+} from '@/lib/scanner/continuous-recorder';
+import { isWebXRDepthSupported } from '@/lib/scanner/depth-processor';
 import { HemisphereDiagram } from './HemisphereDiagram';
 import { MaskTouchupModal } from './MaskTouchupModal';
 import { ModelViewer3D } from './ModelViewer3D';
@@ -59,6 +74,27 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string>('');
 
+  // Continuous ARCore-Style Recording state
+  const [captureMode, setCaptureMode] = useState<'continuous' | 'step-by-step'>('continuous');
+  const [isRecording, setIsRecording] = useState<boolean>(false);
+  const [isPaused, setIsPaused] = useState<boolean>(false);
+  const recorderRef = useRef<ContinuousScanRecorder | null>(null);
+  const datasetInputRef = useRef<HTMLInputElement>(null);
+  const [recordingGuidance, setRecordingGuidance] = useState<RecordingGuidance>({
+    status: 'optimal',
+    message: 'Press Start Scan to begin continuous recording.',
+    durationSeconds: 0,
+    capturedFramesCount: 0,
+    keyframeCount: 0,
+    coveragePercent: 0,
+    azimuthCoverage: new Array(12).fill(false),
+    currentAzimuth: 0,
+    isPaused: false,
+    isWebXRActive: false,
+  });
+  const [isProcessingFrames, setIsProcessingFrames] = useState<boolean>(false);
+  const [frameProcessingMessage, setFrameProcessingMessage] = useState<string>('');
+
   // Workflow State
   const [activeStepIndex, setActiveStepIndex] = useState<number>(0);
   const [photos, setPhotos] = useState<ScanPhoto[]>([]);
@@ -82,6 +118,93 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   const [showTips, setShowTips] = useState<boolean>(false);
 
   const currentStep = SCAN_STEPS[activeStepIndex] ?? SCAN_STEPS[0]!;
+
+  // Continuous Scan Controller Methods
+  const startContinuousScan = () => {
+    if (!videoRef.current || !cameraActive) return;
+    const recorder = new ContinuousScanRecorder(videoRef.current, {
+      targetKeyframeIntervalMs: 380,
+      minMotionDiffPercent: 3.5,
+      minBlurScore: 24,
+      onGuidanceUpdate: (g) => {
+        setRecordingGuidance(g);
+      },
+    });
+    recorderRef.current = recorder;
+    recorder.start();
+    setIsRecording(true);
+    setIsPaused(false);
+  };
+
+  const pauseContinuousScan = () => {
+    if (recorderRef.current && isRecording) {
+      recorderRef.current.pause();
+      setIsPaused(true);
+    }
+  };
+
+  const resumeContinuousScan = () => {
+    if (recorderRef.current && isRecording) {
+      recorderRef.current.resume();
+      setIsPaused(false);
+    }
+  };
+
+  const stopContinuousScan = async () => {
+    if (!recorderRef.current || !isRecording) return;
+    setIsRecording(false);
+    setIsPaused(false);
+    setIsProcessingFrames(true);
+    setFrameProcessingMessage('Finalizing continuous recording frames…');
+
+    try {
+      const frames = await recorderRef.current.stop();
+      if (frames.length > 0) {
+        setFrameProcessingMessage(`Filtering and validating ${frames.length} keyframes…`);
+        const newPhotos = await processRecordedFramesToPhotos(frames, (msg) => {
+          setFrameProcessingMessage(msg);
+        });
+        setPhotos((prev) => [...prev, ...newPhotos]);
+      }
+    } catch (err: any) {
+      console.error('Frame processing failed:', err);
+    } finally {
+      setIsProcessingFrames(false);
+      setFrameProcessingMessage('');
+      recorderRef.current = null;
+    }
+  };
+
+  const handleExportDataset = () => {
+    if (photos.length === 0) return;
+    const blob = exportScanDataset(photos, {
+      objectName: targetProject ? targetProject.name : 'Scanned Object',
+      captureDurationSec: recordingGuidance.durationSeconds,
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `addis-ar-scan-dataset-${Date.now()}.json`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  };
+
+  const handleDatasetUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    try {
+      setIsProcessingFrames(true);
+      setFrameProcessingMessage('Parsing imported scan dataset…');
+      const importedPhotos = await importScanDataset(file);
+      setPhotos((prev) => [...prev, ...importedPhotos]);
+    } catch (err: any) {
+      alert(`Dataset import failed: ${err.message}`);
+    } finally {
+      setIsProcessingFrames(false);
+      setFrameProcessingMessage('');
+      if (e.target) e.target.value = '';
+    }
+  };
 
   // Initialize camera stream
   useEffect(() => {
@@ -597,6 +720,70 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 flex-1">
         {/* Left Column: Viewfinder & Camera Controls (7 Cols) */}
         <div className="lg:col-span-7 flex flex-col space-y-3">
+          {/* Mode Switcher & Dataset Tools */}
+          <div className="flex flex-wrap items-center justify-between gap-2 p-1.5 bg-card/80 backdrop-blur-md rounded-2xl border border-border/60">
+            <div className="flex items-center gap-1">
+              <Button
+                variant={captureMode === 'continuous' ? 'default' : 'ghost'}
+                size="sm"
+                className={`text-xs gap-1.5 h-8 font-medium ${
+                  captureMode === 'continuous'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setCaptureMode('continuous')}
+              >
+                <Video className="w-3.5 h-3.5" />
+                Continuous AR Scan
+              </Button>
+              <Button
+                variant={captureMode === 'step-by-step' ? 'default' : 'ghost'}
+                size="sm"
+                className={`text-xs gap-1.5 h-8 font-medium ${
+                  captureMode === 'step-by-step'
+                    ? 'bg-primary text-primary-foreground shadow-sm'
+                    : 'text-muted-foreground hover:text-foreground'
+                }`}
+                onClick={() => setCaptureMode('step-by-step')}
+              >
+                <Camera className="w-3.5 h-3.5" />
+                Step-by-Step
+              </Button>
+            </div>
+
+            <div className="flex items-center gap-1.5">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="text-[11px] h-7 gap-1 text-muted-foreground hover:text-foreground"
+                onClick={() => datasetInputRef.current?.click()}
+                title="Import ARCore scan dataset (.json)"
+              >
+                <Upload className="w-3 h-3" />
+                <span>Import Dataset</span>
+              </Button>
+              <input
+                ref={datasetInputRef}
+                type="file"
+                accept=".json,application/json"
+                hidden
+                onChange={handleDatasetUpload}
+              />
+              {photos.length > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-[11px] h-7 gap-1 text-muted-foreground hover:text-foreground"
+                  onClick={handleExportDataset}
+                  title="Export raw frames & camera telemetry"
+                >
+                  <Download className="w-3 h-3" />
+                  <span>Export</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
           {/* Viewfinder Container */}
           <div className="relative aspect-[4/3] sm:aspect-[16/10] bg-neutral-950 rounded-2xl overflow-hidden border border-border/80 shadow-2xl flex items-center justify-center">
             {cameraActive ? (
@@ -625,7 +812,13 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
             {/* Scanning Overlay Reticle */}
             <div className="absolute inset-0 pointer-events-none flex items-center justify-center">
-              <div className="w-52 h-52 sm:w-64 sm:h-64 border-2 border-dashed border-primary/50 rounded-3xl flex items-center justify-center">
+              <div
+                className={`w-52 h-52 sm:w-64 sm:h-64 border-2 rounded-3xl flex items-center justify-center transition-all ${
+                  isRecording
+                    ? 'border-red-500/70 shadow-[0_0_30px_rgba(239,68,68,0.3)] animate-pulse'
+                    : 'border-dashed border-primary/50'
+                }`}
+              >
                 <div className="w-4 h-4 border-t-2 border-l-2 border-primary absolute top-2 left-2" />
                 <div className="w-4 h-4 border-t-2 border-r-2 border-primary absolute top-2 right-2" />
                 <div className="w-4 h-4 border-b-2 border-l-2 border-primary absolute bottom-2 left-2" />
@@ -636,10 +829,43 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
             {/* Top Viewfinder Controls */}
             <div className="absolute top-3 left-3 right-3 flex items-center justify-between pointer-events-auto">
-              <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-semibold text-white flex items-center gap-1.5 border border-white/10">
-                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                {currentStep.title} ({activeStepIndex + 1}/{SCAN_STEPS.length})
-              </div>
+              {captureMode === 'continuous' ? (
+                <div className="flex items-center gap-2">
+                  <div className="bg-black/75 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-semibold text-white flex items-center gap-2 border border-white/10 shadow-lg">
+                    {isRecording ? (
+                      <>
+                        <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
+                        <span className="font-mono text-red-400">
+                          {Math.floor(recordingGuidance.durationSeconds / 60)
+                            .toString()
+                            .padStart(2, '0')}
+                          :
+                          {Math.floor(recordingGuidance.durationSeconds % 60)
+                            .toString()
+                            .padStart(2, '0')}
+                        </span>
+                        <span className="text-white/40">|</span>
+                        <span>{recordingGuidance.keyframeCount} keyframes</span>
+                      </>
+                    ) : (
+                      <>
+                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                        <span>Continuous AR Mode</span>
+                      </>
+                    )}
+                  </div>
+
+                  <div className="bg-black/60 backdrop-blur-md px-2.5 py-1 rounded-full text-[10px] font-mono text-white/80 border border-white/10 flex items-center gap-1.5">
+                    <Compass className="w-3 h-3 text-primary" />
+                    <span>{recordingGuidance.coveragePercent}% Orbit</span>
+                  </div>
+                </div>
+              ) : (
+                <div className="bg-black/60 backdrop-blur-md px-3 py-1 rounded-full text-[11px] font-semibold text-white flex items-center gap-1.5 border border-white/10">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  {currentStep.title} ({activeStepIndex + 1}/{SCAN_STEPS.length})
+                </div>
+              )}
 
               <div className="flex items-center gap-1.5">
                 {torchAvailable && (
@@ -670,8 +896,39 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               </div>
             </div>
 
+            {/* Continuous Recording Telemetry Overlay (Bottom of Viewfinder) */}
+            {isRecording && (
+              <div className="absolute bottom-3 left-3 right-3 flex flex-col gap-1.5 pointer-events-none">
+                <div
+                  className={`px-3 py-1.5 rounded-xl text-[11px] font-semibold flex items-center gap-2 backdrop-blur-md shadow-lg transition-all ${
+                    recordingGuidance.status === 'too-fast'
+                      ? 'bg-amber-500/90 text-amber-950'
+                      : recordingGuidance.status === 'idle'
+                        ? 'bg-neutral-800/90 text-white'
+                        : 'bg-emerald-600/90 text-white'
+                  }`}
+                >
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span>{recordingGuidance.message}</span>
+                </div>
+              </div>
+            )}
+
+            {/* Frame Processing Spinner Overlay */}
+            {isProcessingFrames && (
+              <div className="absolute inset-0 bg-black/75 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-20">
+                <RefreshCw className="w-8 h-8 text-primary animate-spin mb-3" />
+                <span className="text-xs font-semibold text-white">
+                  {frameProcessingMessage || 'Extracting optimal keyframes…'}
+                </span>
+                <p className="text-[10px] text-white/60 mt-1 max-w-xs">
+                  Filtering motion blur, calculating camera trajectories and generating masks…
+                </p>
+              </div>
+            )}
+
             {/* Bottom Warning Alert */}
-            {lastWarning && (
+            {!isRecording && lastWarning && (
               <div className="absolute bottom-3 left-3 right-3 bg-amber-500/90 text-amber-950 px-3 py-1.5 rounded-xl text-[11px] font-semibold flex items-center gap-2 backdrop-blur-md shadow-lg animate-in fade-in slide-in-from-bottom-2">
                 <AlertTriangle className="w-4 h-4 shrink-0" />
                 <span className="truncate">{lastWarning}</span>
@@ -680,60 +937,140 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
           </div>
 
           {/* Shutter & File Upload Controls */}
-          <div className="flex items-center justify-between p-3 bg-card/60 rounded-2xl border border-border/60">
-            <Button
-              variant="outline"
-              size="sm"
-              className="text-xs gap-1.5"
-              onClick={() => fileInputRef.current?.click()}
-            >
-              <Upload className="w-3.5 h-3.5" />
-              Upload Photos
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept="image/*"
-              hidden
-              onChange={handleFileUpload}
-            />
-
-            {/* Shutter Button */}
-            <button
-              onClick={capturePhoto}
-              disabled={!cameraActive}
-              aria-label="Capture photograph"
-              className="relative w-16 h-16 rounded-full border-4 border-primary flex items-center justify-center transition-all transform active:scale-90 hover:scale-105 disabled:opacity-40"
-            >
-              <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
-                <Camera className="w-6 h-6 text-primary-foreground" />
+          {captureMode === 'continuous' ? (
+            <div className="p-4 bg-card/70 rounded-2xl border border-border/60 flex flex-col sm:flex-row items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1.5 h-9"
+                  onClick={() => fileInputRef.current?.click()}
+                  disabled={isRecording}
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  Upload Batch
+                </Button>
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/*"
+                  hidden
+                  onChange={handleFileUpload}
+                />
               </div>
-            </button>
 
-            <div className="text-right">
-              <span className="text-xs font-semibold text-foreground">
-                {photos.length} captured
-              </span>
-              <p className="text-[10px] text-muted-foreground">
-                {photos.length < 6
-                  ? 'Min 6 needed'
-                  : photos.length < 20
-                    ? 'Good start'
-                    : 'Optimal (20–60)'}
-              </p>
+              {/* Central Continuous Action Controls */}
+              {!isRecording ? (
+                <Button
+                  onClick={startContinuousScan}
+                  disabled={!cameraActive}
+                  size="lg"
+                  className="h-12 px-7 rounded-full bg-gradient-to-r from-red-600 via-purple-600 to-indigo-600 font-bold text-xs sm:text-sm text-white shadow-xl shadow-red-900/30 flex items-center gap-2.5 hover:opacity-95 active:scale-95 transition-all"
+                >
+                  <span className="w-3.5 h-3.5 rounded-full bg-white animate-pulse" />
+                  Start Continuous Scan
+                </Button>
+              ) : (
+                <div className="flex items-center gap-2.5">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="h-11 px-4 text-xs font-semibold rounded-full gap-1.5"
+                    onClick={isPaused ? resumeContinuousScan : pauseContinuousScan}
+                  >
+                    {isPaused ? <Play className="w-4 h-4 text-emerald-400" /> : <Pause className="w-4 h-4 text-amber-400" />}
+                    {isPaused ? 'Resume' : 'Pause'}
+                  </Button>
+                  <Button
+                    variant="destructive"
+                    size="default"
+                    className="h-11 px-6 rounded-full font-bold text-xs gap-2 shadow-lg shadow-red-900/40"
+                    onClick={() => { void stopContinuousScan(); }}
+                  >
+                    <Square className="w-3.5 h-3.5 fill-white" />
+                    Stop & Review
+                  </Button>
+                </div>
+              )}
+
+              <div className="text-right text-xs">
+                <span className="font-semibold text-foreground">
+                  {photos.length} views ready
+                </span>
+                <p className="text-[10px] text-muted-foreground">
+                  {photos.length < 6
+                    ? 'Record ~15s'
+                    : photos.length < 24
+                      ? 'Solid coverage'
+                      : 'High fidelity (30+)'}
+                </p>
+              </div>
             </div>
-          </div>
+          ) : (
+            <div className="flex items-center justify-between p-3 bg-card/60 rounded-2xl border border-border/60">
+              <Button
+                variant="outline"
+                size="sm"
+                className="text-xs gap-1.5"
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="w-3.5 h-3.5" />
+                Upload Photos
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                accept="image/*"
+                hidden
+                onChange={handleFileUpload}
+              />
 
-          {/* Current Step Instruction Card */}
-          <div className="p-4 bg-card rounded-2xl border border-border/60 text-xs space-y-1">
+              {/* Shutter Button */}
+              <button
+                onClick={capturePhoto}
+                disabled={!cameraActive}
+                aria-label="Capture photograph"
+                className="relative w-16 h-16 rounded-full border-4 border-primary flex items-center justify-center transition-all transform active:scale-90 hover:scale-105 disabled:opacity-40"
+              >
+                <div className="w-12 h-12 rounded-full bg-primary flex items-center justify-center shadow-lg shadow-primary/30">
+                  <Camera className="w-6 h-6 text-primary-foreground" />
+                </div>
+              </button>
+
+              <div className="text-right">
+                <span className="text-xs font-semibold text-foreground">
+                  {photos.length} captured
+                </span>
+                <p className="text-[10px] text-muted-foreground">
+                  {photos.length < 6
+                    ? 'Min 6 needed'
+                    : photos.length < 20
+                      ? 'Good start'
+                      : 'Optimal (20–60)'}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Guidance Info Card */}
+          <div className="p-3.5 bg-card rounded-2xl border border-border/60 text-xs space-y-1">
             <div className="font-semibold text-primary flex items-center justify-between">
-              <span>{currentStep.title}</span>
+              <span>
+                {captureMode === 'continuous'
+                  ? 'ARCore-Style Continuous Orbit'
+                  : currentStep.title}
+              </span>
               <span className="text-[10px] text-muted-foreground uppercase font-mono">
-                {currentStep.stageName} stage
+                {captureMode === 'continuous' ? 'Visual Tracking' : `${currentStep.stageName} stage`}
               </span>
             </div>
-            <p className="text-muted-foreground text-[11px]">{currentStep.instruction}</p>
+            <p className="text-muted-foreground text-[11px]">
+              {captureMode === 'continuous'
+                ? 'Move slowly in a circular orbit around the object while keeping it inside the reticle. The algorithm automatically samples sharp views.'
+                : currentStep.instruction}
+            </p>
           </div>
         </div>
 
