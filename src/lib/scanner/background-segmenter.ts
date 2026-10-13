@@ -50,9 +50,9 @@ export async function segmentForeground(
       ) {
         if ((x + y) % 3 === 0) {
           const idx = (y * width + x) * 4;
-          bgR.push(data[idx]);
-          bgG.push(data[idx + 1]);
-          bgB.push(data[idx + 2]);
+          bgR.push(data[idx] ?? 0);
+          bgG.push(data[idx + 1] ?? 0);
+          bgB.push(data[idx + 2] ?? 0);
         }
       }
     }
@@ -76,10 +76,10 @@ export async function segmentForeground(
       const idxT = ((y - 1) * width + x) * 4;
       const idxB = ((y + 1) * width + x) * 4;
 
-      const lumL = 0.299 * data[idxL] + 0.587 * data[idxL + 1] + 0.114 * data[idxL + 2];
-      const lumR = 0.299 * data[idxR] + 0.587 * data[idxR + 1] + 0.114 * data[idxR + 2];
-      const lumT = 0.299 * data[idxT] + 0.587 * data[idxT + 1] + 0.114 * data[idxT + 2];
-      const lumB = 0.299 * data[idxB] + 0.587 * data[idxB + 1] + 0.114 * data[idxB + 2];
+      const lumL = 0.299 * (data[idxL] ?? 0) + 0.587 * (data[idxL + 1] ?? 0) + 0.114 * (data[idxL + 2] ?? 0);
+      const lumR = 0.299 * (data[idxR] ?? 0) + 0.587 * (data[idxR + 1] ?? 0) + 0.114 * (data[idxR + 2] ?? 0);
+      const lumT = 0.299 * (data[idxT] ?? 0) + 0.587 * (data[idxT + 1] ?? 0) + 0.114 * (data[idxT + 2] ?? 0);
+      const lumB = 0.299 * (data[idxB] ?? 0) + 0.587 * (data[idxB + 1] ?? 0) + 0.114 * (data[idxB + 2] ?? 0);
 
       const dx = lumR - lumL;
       const dy = lumB - lumT;
@@ -98,9 +98,9 @@ export async function segmentForeground(
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = (y * width + x) * 4;
-      const r = data[idx];
-      const g = data[idx + 1];
-      const b = data[idx + 2];
+      const r = data[idx] ?? 0;
+      const g = data[idx + 1] ?? 0;
+      const b = data[idx + 2] ?? 0;
       const lum = 0.299 * r + 0.587 * g + 0.114 * b;
 
       // Color distance from the tabletop blanket surface
@@ -156,7 +156,7 @@ export async function segmentForeground(
   const transImgData = transCtx.createImageData(width, height);
 
   for (let i = 0; i < width * height; i++) {
-    const alpha = smoothedMask[i];
+    const alpha = smoothedMask[i] ?? 0;
     const pIdx = i * 4;
 
     // Mask output: Black & White
@@ -166,9 +166,9 @@ export async function segmentForeground(
     maskImgData.data[pIdx + 3] = 255;
 
     // Transparent output: Original RGB + smoothed Alpha
-    transImgData.data[pIdx] = data[pIdx];
-    transImgData.data[pIdx + 1] = data[pIdx + 1];
-    transImgData.data[pIdx + 2] = data[pIdx + 2];
+    transImgData.data[pIdx] = data[pIdx] ?? 0;
+    transImgData.data[pIdx + 1] = data[pIdx + 1] ?? 0;
+    transImgData.data[pIdx + 2] = data[pIdx + 2] ?? 0;
     transImgData.data[pIdx + 3] = alpha;
   }
 
@@ -197,7 +197,8 @@ function smoothMask(
       let count = 0;
       for (let dy = -1; dy <= 1; dy++) {
         for (let dx = -1; dx <= 1; dx++) {
-          if (input[(y + dy) * width + (x + dx)] > 128) {
+          const val = input[(y + dy) * width + (x + dx)];
+          if (val !== undefined && val > 128) {
             count++;
           }
         }
@@ -239,15 +240,19 @@ export async function applyBrushEdit(
   maskCtx.lineCap = 'round';
   maskCtx.lineJoin = 'round';
 
-  if (editPoints.length === 1) {
+  const firstPt = editPoints[0];
+  if (editPoints.length === 1 && firstPt) {
     maskCtx.beginPath();
-    maskCtx.arc(editPoints[0].x, editPoints[0].y, brushRadius, 0, Math.PI * 2);
+    maskCtx.arc(firstPt.x, firstPt.y, brushRadius, 0, Math.PI * 2);
     maskCtx.fill();
-  } else if (editPoints.length > 1) {
+  } else if (editPoints.length > 1 && firstPt) {
     maskCtx.beginPath();
-    maskCtx.moveTo(editPoints[0].x, editPoints[0].y);
+    maskCtx.moveTo(firstPt.x, firstPt.y);
     for (let i = 1; i < editPoints.length; i++) {
-      maskCtx.lineTo(editPoints[i].x, editPoints[i].y);
+      const pt = editPoints[i];
+      if (pt) {
+        maskCtx.lineTo(pt.x, pt.y);
+      }
     }
     maskCtx.stroke();
   }
@@ -263,7 +268,7 @@ export async function applyBrushEdit(
   const origImgData = origCtx.getImageData(0, 0, width, height);
 
   for (let i = 0; i < width * height; i++) {
-    const alpha = updatedMaskData[i * 4]; // R channel of mask
+    const alpha = updatedMaskData[i * 4] ?? 255; // R channel of mask
     origImgData.data[i * 4 + 3] = alpha;
   }
   origCtx.putImageData(origImgData, 0, 0);

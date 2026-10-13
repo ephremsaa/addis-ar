@@ -42,7 +42,7 @@ import { newProject, newObject, saveProject, type Project } from '@/lib/ar/proje
 
 interface ScannerWorkspaceProps {
   onClose?: () => void;
-  targetProject?: Project;
+  targetProject?: Project | undefined;
 }
 
 export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspaceProps) {
@@ -81,7 +81,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   const [serverUrl, setServerUrl] = useState<string>('http://localhost:8000');
   const [showTips, setShowTips] = useState<boolean>(false);
 
-  const currentStep = SCAN_STEPS[activeStepIndex] || SCAN_STEPS[0];
+  const currentStep = SCAN_STEPS[activeStepIndex] ?? SCAN_STEPS[0]!;
 
   // Initialize camera stream
   useEffect(() => {
@@ -197,7 +197,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     // Validate quality
     const quality = await validateImageQuality(thumbCanvas);
     if (quality.warnings.length > 0) {
-      setLastWarning(quality.warnings[0]);
+      setLastWarning(quality.warnings[0] ?? '');
     } else {
       setLastWarning('');
     }
@@ -236,6 +236,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
     for (let i = 0; i < files.length; i++) {
       const file = files[i];
+      if (!file) continue;
       const dataUrl = await new Promise<string>((res) => {
         const reader = new FileReader();
         reader.onload = () => res(String(reader.result));
@@ -267,9 +268,11 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       if (totalBatch <= SCAN_STEPS.length && photos.length === 0) {
         const stepIdx = i % SCAN_STEPS.length;
         const step = SCAN_STEPS[stepIdx];
-        azimuth = step.azimuth;
-        elevation = step.elevation;
-        angleGroup = step.group;
+        if (step) {
+          azimuth = step.azimuth;
+          elevation = step.elevation;
+          angleGroup = step.group;
+        }
       } else {
         // Continuous orbital trajectory for multi-view batch uploads (e.g. 38 photos)
         const globalIdx = photos.length + i;
@@ -873,7 +876,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                 (reconstructionStage.stage !== 'idle' &&
                   reconstructionStage.stage !== 'failed')
               }
-              onClick={startReconstruction}
+              onClick={() => { void startReconstruction(); }}
             >
               <Play className="w-4 h-4 fill-primary-foreground" />
               {reconstructionStage.stage !== 'idle' &&

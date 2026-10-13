@@ -30,13 +30,14 @@ export async function validateImageQuality(
   const hist = new Uint32Array(256);
 
   for (let i = 0, j = 0; i < data.length; i += 4, j++) {
-    const r = data[i];
-    const g = data[i + 1];
-    const b = data[i + 2];
+    const r = data[i] ?? 0;
+    const g = data[i + 1] ?? 0;
+    const b = data[i + 2] ?? 0;
     const l = Math.round(0.299 * r + 0.587 * g + 0.114 * b);
     gray[j] = l;
     luminanceSum += l;
-    hist[l]++;
+    const hVal = hist[l] ?? 0;
+    hist[l] = hVal + 1;
   }
 
   const avgLuminance = luminanceSum / (width * height);
@@ -60,11 +61,11 @@ export async function validateImageQuality(
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x;
-      const center = gray[idx];
-      const top = gray[idx - width];
-      const bottom = gray[idx + width];
-      const left = gray[idx - 1];
-      const right = gray[idx + 1];
+      const center = gray[idx] ?? 0;
+      const top = gray[idx - width] ?? 0;
+      const bottom = gray[idx + width] ?? 0;
+      const left = gray[idx - 1] ?? 0;
+      const right = gray[idx + 1] ?? 0;
 
       const lap = top + bottom + left + right - 4 * center;
       laplacianSum += lap;

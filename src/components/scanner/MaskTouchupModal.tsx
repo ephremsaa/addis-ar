@@ -122,6 +122,7 @@ export function MaskTouchupModal({
   const handleUndo = () => {
     if (history.length === 0) return;
     const prev = history[history.length - 1];
+    if (!prev) return;
     setCurrentMask(prev.mask);
     setCurrentTrans(prev.trans);
     setHistory((s) => s.slice(0, -1));

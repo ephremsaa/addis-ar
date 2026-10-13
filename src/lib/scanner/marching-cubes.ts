@@ -106,13 +106,13 @@ const TRI_TABLE = new Int8Array([
 ]);
 
 // Corner vertices of a unit cube (0-7)
-const CORNERS = [
+const CORNERS: ReadonlyArray<readonly [number, number, number]> = [
   [0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0],
   [0, 0, 1], [1, 0, 1], [1, 1, 1], [0, 1, 1],
 ];
 
 // Pairs of corners defining each of the 12 edges
-const EDGE_PAIRS = [
+const EDGE_PAIRS: ReadonlyArray<readonly [number, number]> = [
   [0, 1], [1, 2], [2, 3], [3, 0],
   [4, 5], [5, 6], [6, 7], [7, 4],
   [0, 4], [1, 5], [2, 6], [3, 7],
@@ -140,8 +140,8 @@ export function marchCubes(
   const { nx, ny, nz, minX, minY, minZ, cellSize, values } = grid;
   const positions: number[] = [];
 
-  const getVal = (x: number, y: number, z: number) => {
-    return values[z * nx * ny + y * nx + x];
+  const getVal = (x: number, y: number, z: number): number => {
+    return values[z * nx * ny + y * nx + x] ?? 0;
   };
 
   const edgeVertices: Array<[number, number, number]> = new Array(12);
@@ -154,9 +154,11 @@ export function marchCubes(
         const cornerVals: number[] = new Array(8);
 
         for (let i = 0; i < 8; i++) {
-          const cx = x + CORNERS[i][0];
-          const cy = y + CORNERS[i][1];
-          const cz = z + CORNERS[i][2];
+          const corner = CORNERS[i];
+          if (!corner) continue;
+          const cx = x + corner[0];
+          const cy = y + corner[1];
+          const cz = z + corner[2];
           const v = getVal(cx, cy, cz);
           cornerVals[i] = v;
           if (v > isolevel) {
@@ -167,15 +169,17 @@ export function marchCubes(
         // Entirely inside or entirely outside
         if (cubeIndex === 0 || cubeIndex === 255) continue;
 
-        const edges = EDGE_TABLE[cubeIndex];
+        const edges = EDGE_TABLE[cubeIndex] ?? 0;
         if (edges === 0) continue;
 
         // Interpolate vertices along intersecting edges
         for (let e = 0; e < 12; e++) {
           if (edges & (1 << e)) {
-            const [c1, c2] = EDGE_PAIRS[e];
-            const v1 = cornerVals[c1];
-            const v2 = cornerVals[c2];
+            const pair = EDGE_PAIRS[e];
+            if (!pair) continue;
+            const [c1, c2] = pair;
+            const v1 = cornerVals[c1] ?? 0;
+            const v2 = cornerVals[c2] ?? 0;
 
             let t = 0.5;
             if (Math.abs(v2 - v1) > 1e-6) {
@@ -183,13 +187,18 @@ export function marchCubes(
             }
             t = Math.max(0, Math.min(1, t));
 
-            const p1x = minX + (x + CORNERS[c1][0]) * cellSize;
-            const p1y = minY + (y + CORNERS[c1][1]) * cellSize;
-            const p1z = minZ + (z + CORNERS[c1][2]) * cellSize;
+            if (c1 === undefined || c2 === undefined) continue;
+            const corner1 = CORNERS[c1];
+            const corner2 = CORNERS[c2];
+            if (!corner1 || !corner2) continue;
 
-            const p2x = minX + (x + CORNERS[c2][0]) * cellSize;
-            const p2y = minY + (y + CORNERS[c2][1]) * cellSize;
-            const p2z = minZ + (z + CORNERS[c2][2]) * cellSize;
+            const p1x = minX + (x + corner1[0]) * cellSize;
+            const p1y = minY + (y + corner1[1]) * cellSize;
+            const p1z = minZ + (z + corner1[2]) * cellSize;
+
+            const p2x = minX + (x + corner2[0]) * cellSize;
+            const p2y = minY + (y + corner2[1]) * cellSize;
+            const p2z = minZ + (z + corner2[2]) * cellSize;
 
             edgeVertices[e] = [
               p1x + t * (p2x - p1x),
@@ -203,9 +212,10 @@ export function marchCubes(
         const triOffset = (cubeIndex % 64) * 16;
         for (let i = 0; i < 15; i += 3) {
           const e1 = TRI_TABLE[triOffset + i];
-          if (e1 < 0) break;
+          if (e1 === undefined || e1 < 0) break;
           const e2 = TRI_TABLE[triOffset + i + 1];
           const e3 = TRI_TABLE[triOffset + i + 2];
+          if (e2 === undefined || e3 === undefined) break;
 
           const vert1 = edgeVertices[e1];
           const vert2 = edgeVertices[e2];

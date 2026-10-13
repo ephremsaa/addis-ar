@@ -78,7 +78,7 @@ export function extractKeypoints(
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < gray.length; i++) {
     const idx = i * 4;
-    gray[i] = Math.round(0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2]);
+    gray[i] = Math.round(0.299 * (data[idx] ?? 0) + 0.587 * (data[idx + 1] ?? 0) + 0.114 * (data[idx + 2] ?? 0));
   }
 
   const corners: Array<{ x: number; y: number; score: number }> = [];
@@ -93,16 +93,16 @@ export function extractKeypoints(
 
   for (let y = border; y < height - border; y += 2) {
     for (let x = border; x < width - border; x += 2) {
-      const centerVal = gray[y * width + x];
+      const centerVal = gray[y * width + x] ?? 0;
 
       // Quick rejection check at cardinal points: 0, 4, 8, 12
       let brightCount = 0;
       let darkCount = 0;
 
-      const c0 = gray[(y + 3) * width + x];
-      const c4 = gray[y * width + (x + 3)];
-      const c8 = gray[(y - 3) * width + x];
-      const c12 = gray[y * width + (x - 3)];
+      const c0 = gray[(y + 3) * width + x] ?? 0;
+      const c4 = gray[y * width + (x + 3)] ?? 0;
+      const c8 = gray[(y - 3) * width + x] ?? 0;
+      const c12 = gray[y * width + (x - 3)] ?? 0;
 
       if (c0 > centerVal + threshold) brightCount++;
       else if (c0 < centerVal - threshold) darkCount++;
@@ -121,8 +121,10 @@ export function extractKeypoints(
       let score = 0;
 
       for (let k = 0; k < 16; k++) {
-        const [dx, dy] = circleOffsets[k];
-        const val = gray[(y + dy) * width + (x + dx)];
+        const offset = circleOffsets[k];
+        if (!offset) continue;
+        const [dx, dy] = offset;
+        const val = gray[(y + dy) * width + (x + dx)] ?? 0;
         const diff = val - centerVal;
         if (diff > threshold) {
           fullBright++;
@@ -150,7 +152,9 @@ export function extractKeypoints(
       let b = 0;
       for (let bit = 0; bit < 8; bit++) {
         const pairIdx = (byte * 8 + bit) % BRIEF_PAIRS.length;
-        const [x1, y1, x2, y2] = BRIEF_PAIRS[pairIdx];
+        const pair = BRIEF_PAIRS[pairIdx];
+        if (!pair) continue;
+        const [x1, y1, x2, y2] = pair;
         const p1 = gray[(c.y + y1) * width + (c.x + x1)] || 0;
         const p2 = gray[(c.y + y2) * width + (c.x + x2)] || 0;
         if (p1 > p2) {
@@ -174,7 +178,10 @@ export function extractKeypoints(
 function hammingDistance(d1: Uint8Array, d2: Uint8Array): number {
   let dist = 0;
   for (let i = 0; i < 32; i++) {
-    let v = d1[i] ^ d2[i];
+    const v1 = d1[i];
+    const v2 = d2[i];
+    if (v1 === undefined || v2 === undefined) continue;
+    let v = v1 ^ v2;
     while (v > 0) {
       dist += v & 1;
       v >>= 1;
@@ -254,6 +261,7 @@ export function ransacEpipolarFilter(
     const sampleIdx = Math.floor(Math.random() * matches.length);
     const p1 = pts1[sampleIdx];
     const p2 = pts2[sampleIdx];
+    if (!p1 || !p2) continue;
     const dx = p2.x - p1.x;
     const dy = p2.y - p1.y;
 
@@ -263,12 +271,14 @@ export function ransacEpipolarFilter(
     for (let i = 0; i < matches.length; i++) {
       const curP1 = pts1[i];
       const curP2 = pts2[i];
+      const match = matches[i];
+      if (!curP1 || !curP2 || !match) continue;
       const testDx = curP2.x - curP1.x;
       const testDy = curP2.y - curP1.y;
 
       const diff = Math.hypot(testDx - dx, testDy - dy);
       if (diff <= threshNorm) {
-        currentInliers.push(matches[i]);
+        currentInliers.push(match);
         errSum += (diff / threshNorm) * distanceThresholdPx;
       }
     }
@@ -319,6 +329,7 @@ export async function estimateMultiViewCameraPoses(
   // Stage 1: Load images & extract optical features
   for (let i = 0; i < photos.length; i++) {
     const photo = photos[i];
+    if (!photo) continue;
     const img = await loadImage(photo.dataUrl);
 
     analysisCanvas.height = Math.round((img.height / img.width) * analysisCanvas.width);
@@ -357,7 +368,10 @@ export async function estimateMultiViewCameraPoses(
 
   for (let i = 0; i < totalPhotos; i++) {
     const nextIdx = (i + 1) % totalPhotos;
-    const rawMatches = matchFeatures(photoKeypoints[i].keypoints, photoKeypoints[nextIdx].keypoints);
+    const curPk = photoKeypoints[i];
+    const nextPk = photoKeypoints[nextIdx];
+    if (!curPk || !nextPk) continue;
+    const rawMatches = matchFeatures(curPk.keypoints, nextPk.keypoints);
     const { inliers } = ransacEpipolarFilter(rawMatches, analysisCanvas.width, analysisCanvas.height);
 
     if (inliers.length >= 6) {
@@ -367,7 +381,9 @@ export async function estimateMultiViewCameraPoses(
     // Multi-hop (skip 1) for strong geometric baseline
     if (totalPhotos >= 6) {
       const skipIdx = (i + 2) % totalPhotos;
-      const skipMatches = matchFeatures(photoKeypoints[i].keypoints, photoKeypoints[skipIdx].keypoints);
+      const skipPk = photoKeypoints[skipIdx];
+      if (!skipPk) continue;
+      const skipMatches = matchFeatures(curPk.keypoints, skipPk.keypoints);
       const { inliers: skipInliers } = ransacEpipolarFilter(skipMatches, analysisCanvas.width, analysisCanvas.height);
       if (skipInliers.length >= 8) {
         pairwiseMatches.push({ camIdx1: i, camIdx2: skipIdx, matches: skipInliers });
@@ -382,6 +398,7 @@ export async function estimateMultiViewCameraPoses(
   // Stage 3: Solve calibrated 6-DoF camera extrinsics
   for (let i = 0; i < photoKeypoints.length; i++) {
     const curr = photoKeypoints[i];
+    if (!curr) continue;
     const prevIdx = (i - 1 + photoKeypoints.length) % photoKeypoints.length;
     const pair = pairwiseMatches.find(
       (m) => (m.camIdx1 === prevIdx && m.camIdx2 === i) || (m.camIdx1 === i && m.camIdx2 === prevIdx)

@@ -27,7 +27,7 @@ export interface QualityReport {
     canAutoRetry: boolean;
     reason: string;
     strategy: 'filter-blurry' | 'relax-features' | 'conservative-carving' | 'recompute-textures';
-  };
+  } | undefined;
 }
 
 /**

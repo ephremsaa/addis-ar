@@ -116,6 +116,7 @@ export function mapMultiViewTextures(
 
     for (let c = 0; c < cameraBuffers.length; c++) {
       const cam = cameraBuffers[c];
+      if (!cam) continue;
       viewDir.subVectors(cam.pose.position, faceCenter).normalize();
       const dot = faceNormal.dot(viewDir);
 
@@ -135,7 +136,7 @@ export function mapMultiViewTextures(
         const mpx = Math.floor(((proj.x + 1) / 2) * cam.maskWidth);
         const mpy = Math.floor(((1 - proj.y) / 2) * cam.maskHeight);
         if (mpx >= 0 && mpx < cam.maskWidth && mpy >= 0 && mpy < cam.maskHeight) {
-          const maskAlpha = cam.maskData[(mpy * cam.maskWidth + mpx) * 4];
+          const maskAlpha = cam.maskData[(mpy * cam.maskWidth + mpx) * 4] ?? 0;
           if (maskAlpha > 60) {
             candidates.push({ camIdx: c, dot, px, py });
           }
@@ -156,26 +157,41 @@ export function mapMultiViewTextures(
       // Smooth cosine multi-view blend
       const c1 = candidates[0];
       const c2 = candidates[1];
-      const cam1 = cameraBuffers[c1.camIdx];
-      const cam2 = cameraBuffers[c2.camIdx];
+      if (c1 && c2) {
+        const cam1 = cameraBuffers[c1.camIdx];
+        const cam2 = cameraBuffers[c2.camIdx];
+        if (cam1 && cam2) {
+          const idx1 = (c1.py * cam1.width + c1.px) * 4;
+          const idx2 = (c2.py * cam2.width + c2.px) * 4;
 
-      const idx1 = (c1.py * cam1.width + c1.px) * 4;
-      const idx2 = (c2.py * cam2.width + c2.px) * 4;
+          const totalWeight = c1.dot + c2.dot || 1;
+          const w1 = c1.dot / totalWeight;
+          const w2 = c2.dot / totalWeight;
 
-      const totalWeight = c1.dot + c2.dot;
-      const w1 = c1.dot / totalWeight;
-      const w2 = c2.dot / totalWeight;
+          const r1 = cam1.imgData[idx1] ?? 0;
+          const g1 = cam1.imgData[idx1 + 1] ?? 0;
+          const b1 = cam1.imgData[idx1 + 2] ?? 0;
 
-      r = Math.round(cam1.imgData[idx1] * w1 + cam2.imgData[idx2] * w2);
-      g = Math.round(cam1.imgData[idx1 + 1] * w1 + cam2.imgData[idx2 + 1] * w2);
-      b = Math.round(cam1.imgData[idx1 + 2] * w1 + cam2.imgData[idx2 + 2] * w2);
+          const r2 = cam2.imgData[idx2] ?? 0;
+          const g2 = cam2.imgData[idx2 + 1] ?? 0;
+          const b2 = cam2.imgData[idx2 + 2] ?? 0;
+
+          r = Math.round(r1 * w1 + r2 * w2);
+          g = Math.round(g1 * w1 + g2 * w2);
+          b = Math.round(b1 * w1 + b2 * w2);
+        }
+      }
     } else {
       const top = candidates[0];
-      const cam = cameraBuffers[top.camIdx];
-      const idx = (top.py * cam.width + top.px) * 4;
-      r = cam.imgData[idx];
-      g = cam.imgData[idx + 1];
-      b = cam.imgData[idx + 2];
+      if (top) {
+        const cam = cameraBuffers[top.camIdx];
+        if (cam) {
+          const idx = (top.py * cam.width + top.px) * 4;
+          r = cam.imgData[idx] ?? 0;
+          g = cam.imgData[idx + 1] ?? 0;
+          b = cam.imgData[idx + 2] ?? 0;
+        }
+      }
     }
 
     // Rasterize polygon onto UV coordinates with 1.5px dilation to prevent black seam lines

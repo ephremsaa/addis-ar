@@ -137,7 +137,7 @@ export function cleanReconstructedMesh(
   // Calculate median edge length
   edgeLengths.sort((a, b) => a - b);
   const medianEdgeLength =
-    edgeLengths.length > 0 ? edgeLengths[Math.floor(edgeLengths.length / 2)] : 0.05;
+    edgeLengths.length > 0 ? (edgeLengths[Math.floor(edgeLengths.length / 2)] ?? 0.05) : 0.05;
 
   // Thresholds derived from local median geometry scale:
   // Legitimate features (like zipper teeth) have small edge lengths.
@@ -167,6 +167,7 @@ export function cleanReconstructedMesh(
   const vToTriangles = new Map<string, number[]>();
   for (let i = 0; i < survivingTriangles.length; i++) {
     const t = survivingTriangles[i];
+    if (!t) continue;
     const k1 = getVKey(t.p1);
     const k2 = getVKey(t.p2);
     const k3 = getVKey(t.p3);
@@ -193,11 +194,12 @@ export function cleanReconstructedMesh(
     while (queue.length > 0) {
       const currIdx = queue.pop()!;
       compIndices.push(currIdx);
-      compArea += survivingTriangles[currIdx].area;
+      const currTri = survivingTriangles[currIdx];
+      if (!currTri) continue;
+      compArea += currTri.area;
 
-      const t = survivingTriangles[currIdx];
       const neighbors = new Set<number>();
-      for (const k of [getVKey(t.p1), getVKey(t.p2), getVKey(t.p3)]) {
+      for (const k of [getVKey(currTri.p1), getVKey(currTri.p2), getVKey(currTri.p3)]) {
         const connected = vToTriangles.get(k) || [];
         for (const c of connected) {
           if (!visited[c]) neighbors.add(c);
@@ -221,19 +223,22 @@ export function cleanReconstructedMesh(
 
   if (components.length > 0) {
     const mainComp = components[0];
-    for (const idx of mainComp.indices) {
-      finalTriIndices.add(idx);
-    }
+    if (mainComp) {
+      for (const idx of mainComp.indices) {
+        finalTriIndices.add(idx);
+      }
 
-    // Keep secondary components if they have >= 5% of main component triangles
-    for (let c = 1; c < components.length; c++) {
-      const comp = components[c];
-      if (comp.indices.length >= Math.max(20, mainComp.indices.length * 0.05)) {
-        for (const idx of comp.indices) {
-          finalTriIndices.add(idx);
+      // Keep secondary components if they have >= 5% of main component triangles
+      for (let c = 1; c < components.length; c++) {
+        const comp = components[c];
+        if (!comp) continue;
+        if (comp.indices.length >= Math.max(20, mainComp.indices.length * 0.05)) {
+          for (const idx of comp.indices) {
+            finalTriIndices.add(idx);
+          }
+        } else {
+          debrisIslandsCount++;
         }
-      } else {
-        debrisIslandsCount++;
       }
     }
   }
@@ -244,6 +249,7 @@ export function cleanReconstructedMesh(
 
   for (const triIdx of finalTriIndices) {
     const tri = survivingTriangles[triIdx];
+    if (!tri) continue;
     const origBase = tri.idx * 3;
 
     newPositions.push(

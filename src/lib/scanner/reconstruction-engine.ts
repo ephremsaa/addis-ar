@@ -30,7 +30,7 @@ export interface DiagnosticPhotoItem {
   id: string;
   thumbnailUrl: string;
   dataUrl: string;
-  maskDataUrl?: string;
+  maskDataUrl?: string | undefined;
   azimuth: number;
   elevation: number;
   isRegistered: boolean;
@@ -166,6 +166,7 @@ export async function reconstruct3DModel(
   const segmentedPhotos: ScanPhoto[] = [];
   for (let i = 0; i < usablePhotos.length; i++) {
     const photo = usablePhotos[i];
+    if (!photo) continue;
     if (!photo.maskDataUrl) {
       const seg = await segmentForeground(photo.dataUrl);
       segmentedPhotos.push({
@@ -366,7 +367,7 @@ export async function reconstruct3DModel(
 
   let occupiedVoxelCount = 0;
   for (let i = 0; i < voxelGrid.values.length; i++) {
-    if (voxelGrid.values[i] > 0) occupiedVoxelCount++;
+    if ((voxelGrid.values[i] ?? 0) > 0) occupiedVoxelCount++;
   }
 
   const rawTriangleCount = Math.floor(rawVertexCount / 3);
@@ -499,9 +500,9 @@ export async function reconstruct3DModel(
         Number(voxelGrid.minZ.toFixed(3)),
       ],
       max: [
-        Number((voxelGrid.minX + voxelGrid.sizeX).toFixed(3)),
-        Number((voxelGrid.minY + voxelGrid.sizeY).toFixed(3)),
-        Number((voxelGrid.minZ + voxelGrid.sizeZ).toFixed(3)),
+        Number((voxelGrid.minX + voxelGrid.nx * voxelGrid.cellSize).toFixed(3)),
+        Number((voxelGrid.minY + voxelGrid.ny * voxelGrid.cellSize).toFixed(3)),
+        Number((voxelGrid.minZ + voxelGrid.nz * voxelGrid.cellSize).toFixed(3)),
       ],
     },
     textureResolution: texSize,
@@ -635,6 +636,7 @@ function carveDensePhotometricGrid(
 
         for (let p = 0; p < numPoses; p++) {
           const cam = cameraBuffers[p];
+          if (!cam) continue;
           const projected = tempVec.clone().applyMatrix4(cam.pose.viewProjMatrix);
 
           if (
@@ -651,7 +653,7 @@ function carveDensePhotometricGrid(
             const py = Math.floor(((1 - projected.y) / 2) * cam.mh);
 
             if (px >= 0 && px < cam.mw && py >= 0 && py < cam.mh) {
-              const alpha = cam.maskData[(py * cam.mw + px) * 4];
+              const alpha = cam.maskData[(py * cam.mw + px) * 4] ?? 0;
               if (alpha > 70) {
                 insideCount++;
 
@@ -659,10 +661,10 @@ function carveDensePhotometricGrid(
                 const ipy = Math.floor(((1 - projected.y) / 2) * cam.ih);
                 if (ipx >= 0 && ipx < cam.iw && ipy >= 0 && ipy < cam.ih) {
                   const idx = (ipy * cam.iw + ipx) * 4;
-                  const lum =
-                    0.299 * cam.imgData[idx] +
-                    0.587 * cam.imgData[idx + 1] +
-                    0.114 * cam.imgData[idx + 2];
+                  const r = cam.imgData[idx] ?? 0;
+                  const g = cam.imgData[idx + 1] ?? 0;
+                  const b = cam.imgData[idx + 2] ?? 0;
+                  const lum = 0.299 * r + 0.587 * g + 0.114 * b;
                   lumSum += lum;
                   lumSqSum += lum * lum;
                   lumCount++;

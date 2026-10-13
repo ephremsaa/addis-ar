@@ -13,11 +13,16 @@ export interface SparsePointCloud {
   points: SparsePoint[];
   pointCount: number;
   meanReprojectionError: number;
+  meanError: number;
   bounds: {
     min: THREE.Vector3;
     max: THREE.Vector3;
     center: THREE.Vector3;
     radius: number;
+  };
+  boundingBox: {
+    min: [number, number, number];
+    max: [number, number, number];
   };
   positionsBuffer: Float32Array; // [x, y, z, ...]
   colorsBuffer: Float32Array;    // [r, g, b, ...]
@@ -160,7 +165,7 @@ export function generateSparsePointCloud(
       let color: [number, number, number] = [0.2, 0.2, 0.25];
       try {
         const p = ctx.getImageData(px % ctx.canvas.width, py % ctx.canvas.height, 1, 1).data;
-        color = [p[0] / 255, p[1] / 255, p[2] / 255];
+        color = [(p[0] ?? 0) / 255, (p[1] ?? 0) / 255, (p[2] ?? 0) / 255];
       } catch {
         // Fallback color
       }
@@ -190,6 +195,7 @@ export function generateSparsePointCloud(
 
   for (let i = 0; i < numPts; i++) {
     const pt = validPoints[i];
+    if (!pt) continue;
     positionsBuffer[i * 3] = pt.position.x;
     positionsBuffer[i * 3 + 1] = pt.position.y;
     positionsBuffer[i * 3 + 2] = pt.position.z;
@@ -211,11 +217,16 @@ export function generateSparsePointCloud(
     points: validPoints,
     pointCount: numPts,
     meanReprojectionError,
+    meanError: meanReprojectionError,
     bounds: {
       min,
       max,
       center,
       radius,
+    },
+    boundingBox: {
+      min: [min.x, min.y, min.z],
+      max: [max.x, max.y, max.z],
     },
     positionsBuffer,
     colorsBuffer,
@@ -253,5 +264,5 @@ function filterStatisticalOutliers(points: SparsePoint[]): SparsePoint[] {
 
   // Keep points within 2.3 standard deviations and within 2.2m of origin
   const threshold = meanDist + stdDist * 2.3;
-  return points.filter((pt, i) => distances[i] <= threshold && distances[i] <= 2.2);
+  return points.filter((pt, i) => (distances[i] ?? Infinity) <= threshold && (distances[i] ?? Infinity) <= 2.2);
 }
