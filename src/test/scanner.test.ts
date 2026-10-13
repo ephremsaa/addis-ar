@@ -257,3 +257,41 @@ describe('3D Object Scanner - Quality Report & Auto-Retry Generation', () => {
     expect(poorReport.retryRecommendation?.canAutoRetry).toBe(true);
   });
 });
+
+describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
+  it('detects and eliminates needle spikes and degenerate faces while preserving genuine geometry', async () => {
+    const { cleanReconstructedMesh } = await import('@/lib/scanner/mesh-cleaner');
+
+    const geom = new THREE.BufferGeometry();
+    // Create 3 triangles:
+    // Tri 1: Normal equilateral-like triangle on real object surface
+    // Tri 2: Degenerate triangle (all identical points)
+    // Tri 3: Needle spike triangle with extreme aspect ratio (base = 0.005, height = 2.5)
+    const positions = new Float32Array([
+      // Normal Triangle
+      0.0, 0.0, 0.0,
+      0.1, 0.0, 0.0,
+      0.05, 0.1, 0.0,
+
+      // Degenerate Triangle (zero area)
+      0.2, 0.2, 0.2,
+      0.2, 0.2, 0.2,
+      0.2, 0.2, 0.2,
+
+      // Needle Spike Triangle (spanning empty space)
+      0.0, 0.0, 0.0,
+      0.002, 0.0, 0.0,
+      0.001, 2.8, 0.0,
+    ]);
+
+    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+    const { geometry: cleaned, report } = cleanReconstructedMesh(geom);
+
+    expect(report.originalFaceCount).toBe(3);
+    expect(report.degenerateFacesRemoved).toBe(1);
+    expect(report.spikeTrianglesRemoved).toBeGreaterThanOrEqual(1);
+    expect(cleaned.getAttribute('position').count).toBe(3); // Only the 1 normal triangle survives
+  });
+});
+

@@ -77,7 +77,27 @@ export async function segmentForeground(
   const stdG = Math.max(16, Math.sqrt(varG / nBg));
   const stdB = Math.max(16, Math.sqrt(varB / nBg));
 
-  // 2. Compute probability mask for each pixel
+  // Compute local gradient magnitude (Sobel-inspired) to capture high-frequency texture (zipper, stitching)
+  const grad = new Float32Array(width * height);
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const idxL = (y * width + (x - 1)) * 4;
+      const idxR = (y * width + (x + 1)) * 4;
+      const idxT = ((y - 1) * width + x) * 4;
+      const idxB = ((y + 1) * width + x) * 4;
+
+      const lumL = 0.299 * data[idxL] + 0.587 * data[idxL + 1] + 0.114 * data[idxL + 2];
+      const lumR = 0.299 * data[idxR] + 0.587 * data[idxR + 1] + 0.114 * data[idxR + 2];
+      const lumT = 0.299 * data[idxT] + 0.587 * data[idxT + 1] + 0.114 * data[idxT + 2];
+      const lumB = 0.299 * data[idxB] + 0.587 * data[idxB + 1] + 0.114 * data[idxB + 2];
+
+      const dx = lumR - lumL;
+      const dy = lumB - lumT;
+      grad[y * width + x] = Math.hypot(dx, dy);
+    }
+  }
+
+  // 2. Compute probability mask for each pixel with dark object protection
   const mask = new Uint8Array(width * height);
   const centerX = width / 2;
   const centerY = height / 2;
@@ -98,15 +118,19 @@ export async function segmentForeground(
       const diffB = (b - meanB) / stdB;
       const colorDist = Math.sqrt(diffR * diffR + diffG * diffG + diffB * diffB);
 
-      // Distance from center (objects are placed in center of camera frame)
+      // Distance from center
       const distFromCenter = Math.hypot(x - centerX, y - centerY);
-      const centerFactor = 1.0 - Math.min(1.0, (distFromCenter / maxDist) * 1.1);
+      const centerFactor = 1.0 - Math.min(1.0, (distFromCenter / maxDist) * 1.05);
 
-      // Saliency score: combination of color distinctiveness and spatial centrality
-      const saliency = colorDist * 0.75 + centerFactor * 1.5;
+      // Texture gradient boost (crucial for textured black cases with zippers)
+      const textureBoost = Math.min(1.8, grad[y * width + x] / 24.0);
 
-      // Thresholding with hysteresis
-      const isForeground = saliency > 1.45 && colorDist > 1.25;
+      // Saliency score: combination of color distinctiveness, texture presence, and spatial centrality
+      const saliency = colorDist * 0.7 + textureBoost * 0.9 + centerFactor * 1.4;
+
+      // Dark object protection: central dark pixels with texture/edges are recognized as foreground
+      const isDarkCentral = (r + g + b) / 3 < 70 && centerFactor > 0.45 && textureBoost > 0.3;
+      const isForeground = (saliency > 1.25 && colorDist > 0.85) || isDarkCentral;
 
       if (isForeground) {
         mask[y * width + x] = 255;

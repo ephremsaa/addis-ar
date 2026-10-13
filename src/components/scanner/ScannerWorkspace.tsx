@@ -37,6 +37,7 @@ import { HemisphereDiagram } from './HemisphereDiagram';
 import { MaskTouchupModal } from './MaskTouchupModal';
 import { ModelViewer3D } from './ModelViewer3D';
 import { QualityReportModal } from './QualityReportModal';
+import { ReconstructionDebugModal } from './ReconstructionDebugModal';
 import { newProject, newObject, saveProject, type Project } from '@/lib/ar/projects';
 
 interface ScannerWorkspaceProps {
@@ -73,6 +74,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   });
   const [reconstructionResult, setReconstructionResult] = useState<ReconstructionResult | null>(null);
   const [showQualityReport, setShowQualityReport] = useState<boolean>(false);
+  const [showDebugModal, setShowDebugModal] = useState<boolean>(false);
 
   // Settings & Modals
   const [showServerModal, setShowServerModal] = useState<boolean>(false);
@@ -256,18 +258,44 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       const quality = await validateImageQuality(thumbCanvas);
       const seg = await segmentForeground(thumbCanvas);
 
-      // Estimate angle by index distribution
-      const stepIdx = (photos.length + i) % SCAN_STEPS.length;
-      const step = SCAN_STEPS[stepIdx];
+      // Estimate continuous angle distribution across 360 degrees
+      const totalBatch = files.length;
+      let azimuth = 0;
+      let elevation = 15;
+      let angleGroup: AngleGroup = 'front';
+
+      if (totalBatch <= SCAN_STEPS.length && photos.length === 0) {
+        const stepIdx = i % SCAN_STEPS.length;
+        const step = SCAN_STEPS[stepIdx];
+        azimuth = step.azimuth;
+        elevation = step.elevation;
+        angleGroup = step.group;
+      } else {
+        // Continuous orbital trajectory for multi-view batch uploads (e.g. 38 photos)
+        const globalIdx = photos.length + i;
+        const globalTotal = photos.length + totalBatch;
+        azimuth = Math.round((globalIdx / globalTotal) * 360) % 360;
+
+        if (globalTotal >= 24 && globalIdx >= Math.floor(globalTotal * 0.65)) {
+          elevation = 40;
+          angleGroup = 'top-front';
+        } else {
+          elevation = 15;
+          if (azimuth < 45 || azimuth >= 315) angleGroup = 'front';
+          else if (azimuth < 135) angleGroup = 'left';
+          else if (azimuth < 225) angleGroup = 'back';
+          else angleGroup = 'right';
+        }
+      }
 
       newItems.push({
         id: crypto.randomUUID(),
         dataUrl,
         thumbnailUrl,
         timestamp: Date.now(),
-        angleGroup: step.group,
-        azimuth: step.azimuth,
-        elevation: step.elevation,
+        angleGroup,
+        azimuth,
+        elevation,
         maskDataUrl: seg.maskDataUrl,
         transparentDataUrl: seg.transparentDataUrl,
         isSegmented: true,
@@ -401,6 +429,15 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <Button
               variant="outline"
               size="sm"
+              onClick={() => setShowDebugModal(true)}
+              className="text-xs gap-1.5 border-amber-500/40 text-amber-300 hover:bg-amber-950/40"
+            >
+              <Sliders className="w-3.5 h-3.5 text-amber-400" />
+              Debug Pipeline
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
               onClick={() => setShowQualityReport(true)}
               className="text-xs gap-1.5 border-purple-500/40 text-purple-300 hover:bg-purple-950/40"
             >
@@ -447,6 +484,21 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             onRetry={(strategy) => {
               setShowQualityReport(false);
               startReconstruction(strategy);
+            }}
+          />
+        )}
+
+        {/* Photogrammetry Reconstruction 9-Stage Debugger Modal */}
+        {showDebugModal && reconstructionResult.diagnostics && (
+          <ReconstructionDebugModal
+            diagnostics={reconstructionResult.diagnostics}
+            isOpen={showDebugModal}
+            onClose={() => setShowDebugModal(false)}
+            onDownloadGlb={() => {
+              const a = document.createElement('a');
+              a.href = reconstructionResult.glbDataUrl;
+              a.download = 'scanned-model.glb';
+              a.click();
             }}
           />
         )}
