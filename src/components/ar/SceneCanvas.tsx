@@ -55,6 +55,14 @@ function Item({
       });
     };
   }, [object]);
+  useEffect(() => {
+    const group = ref.current;
+    if (!group || !model) return;
+    group.add(model);
+    return () => {
+      group.remove(model);
+    };
+  }, [model, selected, object.locked]);
   const content = (
     <group
       ref={ref}
@@ -66,9 +74,7 @@ function Item({
         e.stopPropagation();
         onSelect?.();
       }}
-    >
-      {model && createElement("primitive", { object: model })}
-    </group>
+    ></group>
   );
   if (selected && !object.locked && onChange)
     return (
