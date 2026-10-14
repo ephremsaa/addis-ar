@@ -7,6 +7,7 @@ import { optimizeMesh } from '@/lib/scanner/mesh-optimizer';
 import { SCAN_STEPS, type ScanPhoto } from '@/lib/scanner/types';
 import { extractKeypoints, ransacEpipolarFilter } from '@/lib/scanner/pose-estimator';
 import { generateQualityReport } from '@/lib/scanner/quality-report';
+import { checkColmapServerHealth } from '@/lib/scanner/colmap-client';
 
 // Mock canvas and 2D context for jsdom environment
 beforeAll(() => {
@@ -332,6 +333,36 @@ describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
       expect(Math.abs(originProj.x)).toBeLessThan(0.3);
       expect(Math.abs(originProj.y)).toBeLessThan(0.3);
     }
+  });
+});
+
+describe('COLMAP Photogrammetry Backend Client', () => {
+  it('detects healthy backend server and extracts capabilities', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        status: 'healthy',
+        engine: 'COLMAP + OpenMVS / Open3D Photogrammetry',
+        active_jobs: 0,
+      }),
+    } as any);
+
+    const health = await checkColmapServerHealth('http://localhost:8000');
+    expect(health.ok).toBe(true);
+    expect(health.status).toBe('healthy');
+    expect(health.engine).toContain('COLMAP');
+
+    fetchSpy.mockRestore();
+  });
+
+  it('gracefully reports unreachable server when connection fails', async () => {
+    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Connection refused'));
+
+    const health = await checkColmapServerHealth('http://localhost:9999');
+    expect(health.ok).toBe(false);
+    expect(health.message).toContain('Connection refused');
+
+    fetchSpy.mockRestore();
   });
 });
 

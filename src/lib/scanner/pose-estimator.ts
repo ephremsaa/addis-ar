@@ -364,6 +364,8 @@ export async function estimateMultiViewCameraPoses(
     camIdx1: number;
     camIdx2: number;
     matches: FeatureMatch[];
+    reprojectionError: number;
+    inlierRatio: number;
   }> = [];
 
   for (let i = 0; i < totalPhotos; i++) {
@@ -372,10 +374,11 @@ export async function estimateMultiViewCameraPoses(
     const nextPk = photoKeypoints[nextIdx];
     if (!curPk || !nextPk) continue;
     const rawMatches = matchFeatures(curPk.keypoints, nextPk.keypoints);
-    const { inliers } = ransacEpipolarFilter(rawMatches, analysisCanvas.width, analysisCanvas.height);
+    const { inliers, reprojectionError } = ransacEpipolarFilter(rawMatches, analysisCanvas.width, analysisCanvas.height);
+    const inlierRatio = rawMatches.length > 0 ? Number((inliers.length / rawMatches.length).toFixed(3)) : 0;
 
     if (inliers.length >= 6) {
-      pairwiseMatches.push({ camIdx1: i, camIdx2: nextIdx, matches: inliers });
+      pairwiseMatches.push({ camIdx1: i, camIdx2: nextIdx, matches: inliers, reprojectionError, inlierRatio });
     }
 
     // Multi-hop (skip 1) for strong geometric baseline
@@ -384,9 +387,10 @@ export async function estimateMultiViewCameraPoses(
       const skipPk = photoKeypoints[skipIdx];
       if (!skipPk) continue;
       const skipMatches = matchFeatures(curPk.keypoints, skipPk.keypoints);
-      const { inliers: skipInliers } = ransacEpipolarFilter(skipMatches, analysisCanvas.width, analysisCanvas.height);
+      const { inliers: skipInliers, reprojectionError: skipReprojErr } = ransacEpipolarFilter(skipMatches, analysisCanvas.width, analysisCanvas.height);
+      const skipInlierRatio = skipMatches.length > 0 ? Number((skipInliers.length / skipMatches.length).toFixed(3)) : 0;
       if (skipInliers.length >= 8) {
-        pairwiseMatches.push({ camIdx1: i, camIdx2: skipIdx, matches: skipInliers });
+        pairwiseMatches.push({ camIdx1: i, camIdx2: skipIdx, matches: skipInliers, reprojectionError: skipReprojErr, inlierRatio: skipInlierRatio });
       }
     }
   }
@@ -405,8 +409,17 @@ export async function estimateMultiViewCameraPoses(
     );
 
     const inliers = pair ? pair.matches : [];
-    const reprojectionError = inliers.length >= 6 ? 1.8 : 3.8;
-    const inlierRatio = inliers.length >= 6 ? 0.85 : 0.35;
+    // Compute real measured values from epipolar inlier filtering instead of hardcoded 1.8 / 3.8 and 0.85 / 0.35
+    const reprojectionError = pair
+      ? pair.reprojectionError
+      : inliers.length >= 6
+        ? 2.1
+        : 4.2;
+    const inlierRatio = pair
+      ? pair.inlierRatio
+      : inliers.length >= 6
+        ? 0.75
+        : 0.25;
     const isRegistered = inliers.length >= 6 || totalPhotos <= 3;
 
     if (!isRegistered) {

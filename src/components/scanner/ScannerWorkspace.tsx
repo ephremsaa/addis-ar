@@ -49,6 +49,7 @@ import {
 import { validateImageQuality } from '@/lib/scanner/image-validator';
 import { segmentForeground } from '@/lib/scanner/background-segmenter';
 import { reconstruct3DModel, type ReconstructionResult } from '@/lib/scanner/reconstruction-engine';
+import { reconstructWithColmap, checkColmapServerHealth } from '@/lib/scanner/colmap-client';
 import {
   ContinuousScanRecorder,
   processRecordedFramesToPhotos,
@@ -211,7 +212,10 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
   // Settings & Modals
   const [showServerModal, setShowServerModal] = useState<boolean>(false);
+  const [reconstructionEngine, setReconstructionEngine] = useState<'browser' | 'colmap'>('browser');
   const [serverUrl, setServerUrl] = useState<string>('http://localhost:8000');
+  const [isTestingServer, setIsTestingServer] = useState<boolean>(false);
+  const [serverTestStatus, setServerTestStatus] = useState<string | null>(null);
   const [showTips, setShowTips] = useState<boolean>(false);
 
   // Stop camera tracks cleanly
@@ -574,6 +578,38 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       progress: 5,
       message: 'Initializing multi-view photogrammetry pipeline…',
     });
+
+    // Try Self-Hosted COLMAP Engine if selected
+    if (reconstructionEngine === 'colmap') {
+      try {
+        setReconstructionStage({
+          stage: 'validating',
+          progress: 5,
+          message: 'Connecting to self-hosted COLMAP backend…',
+        });
+        const colmapResult = await reconstructWithColmap(
+          photos,
+          preset,
+          serverUrl,
+          (info) => {
+            setReconstructionStage(info);
+          }
+        );
+        setReconstructionResult(colmapResult);
+        setCurrentScreen('result');
+        return;
+      } catch (colmapErr: any) {
+        console.warn('COLMAP server error or unreachable:', colmapErr);
+        toast.error(
+          `Self-hosted COLMAP server unreachable: ${colmapErr?.message || 'Connection failed'}. Falling back to browser engine.`
+        );
+        setReconstructionStage({
+          stage: 'validating',
+          progress: 10,
+          message: 'COLMAP server unreachable. Falling back to browser engine…',
+        });
+      }
+    }
 
     try {
       const result = await reconstruct3DModel(
@@ -1419,15 +1455,102 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Addis AR uses a high-performance in-browser engine. You can also connect a self-hosted COLMAP backend.
+              Select your photogrammetry reconstruction engine. Use the built-in browser engine or connect to a self-hosted COLMAP backend.
             </p>
 
-            <div className="p-3 rounded-xl border border-primary/40 bg-primary/5 text-xs">
-              <div className="font-semibold text-foreground">Browser Local Engine (Active)</div>
-              <div className="text-muted-foreground text-[11px] mt-0.5">
-                Instant, 100% offline, zero cloud API fees.
+            {/* Engine Selection */}
+            <div className="space-y-2">
+              <label className="text-xs font-semibold text-foreground uppercase tracking-wider block">
+                Reconstruction Engine
+              </label>
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => setReconstructionEngine('browser')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    reconstructionEngine === 'browser'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted/20 text-muted-foreground hover:border-border/80'
+                  }`}
+                >
+                  <div className="font-semibold text-xs text-foreground">Browser (Local)</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Offline, WebGL/WASM</div>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setReconstructionEngine('colmap')}
+                  className={`p-3 rounded-xl border text-left transition-all ${
+                    reconstructionEngine === 'colmap'
+                      ? 'border-primary bg-primary/10 text-primary'
+                      : 'border-border bg-muted/20 text-muted-foreground hover:border-border/80'
+                  }`}
+                >
+                  <div className="font-semibold text-xs text-foreground">Self-hosted COLMAP</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">Dense SfM + OpenMVS</div>
+                </button>
               </div>
             </div>
+
+            {/* Server URL Input for COLMAP */}
+            {reconstructionEngine === 'colmap' ? (
+              <div className="space-y-2 p-3.5 rounded-xl border border-border/80 bg-muted/30">
+                <label className="text-xs font-medium text-foreground block">COLMAP Server URL</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={serverUrl}
+                    onChange={(e) => {
+                      setServerUrl(e.target.value);
+                      setServerTestStatus(null);
+                    }}
+                    placeholder="http://localhost:8000"
+                    className="flex-1 bg-background border border-border rounded-lg px-3 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                  />
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    disabled={isTestingServer}
+                    onClick={async () => {
+                      setIsTestingServer(true);
+                      setServerTestStatus(null);
+                      const res = await checkColmapServerHealth(serverUrl);
+                      setIsTestingServer(false);
+                      if (res.ok) {
+                        setServerTestStatus('Connected! Engine: ' + (res.engine || 'Online'));
+                        toast.success('Connected to COLMAP server!');
+                      } else {
+                        setServerTestStatus('Unreachable: ' + (res.message || 'Connection failed'));
+                        toast.error('COLMAP server unreachable: ' + (res.message || 'Connection failed'));
+                      }
+                    }}
+                    className="text-xs shrink-0"
+                  >
+                    {isTestingServer ? 'Testing…' : 'Test'}
+                  </Button>
+                </div>
+                {serverTestStatus && (
+                  <p
+                    className={`text-[11px] ${
+                      serverTestStatus.startsWith('Connected') ? 'text-emerald-400' : 'text-rose-400'
+                    }`}
+                  >
+                    {serverTestStatus}
+                  </p>
+                )}
+                <p className="text-[10px] text-muted-foreground leading-relaxed">
+                  Start the server with <code className="text-primary">python server/photogrammetry_server.py</code> on your workstation or GPU rig.
+                </p>
+              </div>
+            ) : (
+              <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 text-xs space-y-1">
+                <div className="font-semibold text-foreground">In-Browser Photogrammetry Active</div>
+                <div className="text-muted-foreground text-[11px] leading-relaxed">
+                  Reconstruction executes client-side using RANSAC epipolar tracking, volumetric space carving, and Marching Cubes.
+                </div>
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-2">
               <Button size="sm" onClick={() => setShowServerModal(false)}>

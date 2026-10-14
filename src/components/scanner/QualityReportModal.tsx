@@ -84,6 +84,15 @@ export function QualityReportModal({
 
         {/* Scrollable Content */}
         <div className="flex-1 overflow-y-auto p-4 lg:p-6 space-y-5">
+          {/* Note on Camera Poses */}
+          <div className="p-3.5 rounded-xl bg-blue-950/30 border border-blue-500/30 flex items-start gap-2.5">
+            <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
+            <div className="text-xs text-blue-200/90 leading-relaxed">
+              <span className="font-semibold text-blue-300">Camera Pose Note: </span>
+              In browser scanning mode, camera poses are computed from guided-capture orbit angles and optical baseline fine-tuning rather than full Structure-from-Motion (SfM) bundle adjustment. Reprojection error and inlier rates are estimated from epipolar feature matching. For full SfM camera solving, switch to the Self-Hosted COLMAP engine in Settings.
+            </div>
+          </div>
+
           {/* Composite Quality Score */}
           <div className="p-4 rounded-xl bg-gradient-to-r from-purple-950/40 via-background to-background border border-purple-500/20 flex items-center justify-between">
             <div className="space-y-1">
@@ -91,7 +100,7 @@ export function QualityReportModal({
                 Reconstruction Fidelity Score
               </span>
               <p className="text-xs text-muted-foreground">
-                Derived directly from camera registration, reprojection error, and mesh surface density.
+                Derived directly from camera registration, estimated reprojection error, and mesh surface density.
               </p>
             </div>
             <div className="flex items-baseline gap-1 bg-purple-900/40 px-3 py-1.5 rounded-xl border border-purple-500/30">
@@ -113,12 +122,12 @@ export function QualityReportModal({
             </div>
 
             <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
-              <span className="text-[11px] text-muted-foreground block">Reprojection Error</span>
+              <span className="text-[11px] text-muted-foreground block">Reprojection Error (Est.)</span>
               <div className="text-sm font-bold text-foreground mt-0.5">
-                {metrics.meanReprojectionErrorPx} px
+                ~{metrics.meanReprojectionErrorPx} px
               </div>
               <span className="text-[10px] text-muted-foreground">
-                {metrics.meanReprojectionErrorPx <= 3.0 ? '✓ Sharp rays' : '⚠ High deviation'}
+                {metrics.meanReprojectionErrorPx <= 3.0 ? '✓ Estimated sharp rays' : '⚠ High deviation (est.)'}
               </span>
             </div>
 
