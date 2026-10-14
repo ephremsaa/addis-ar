@@ -61,7 +61,7 @@ import { MaskTouchupModal } from './MaskTouchupModal';
 import { ModelViewer3D } from './ModelViewer3D';
 import { QualityReportModal } from './QualityReportModal';
 import { ReconstructionDebugModal } from './ReconstructionDebugModal';
-import { newProject, newObject, saveProject, type Project } from '@/lib/ar/projects';
+import { newProject, newObject, saveProject, download, blobToDataUrl, type Project } from '@/lib/ar/projects';
 
 interface ScannerWorkspaceProps {
   onClose?: () => void;
@@ -551,12 +551,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       objectName: OBJECT_PRESETS[selectedCategory].name,
       captureDurationSec: recordingGuidance.durationSeconds,
     });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `addis-ar-scan-dataset-${Date.now()}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    download(blob, `addis-ar-scan-dataset-${Date.now()}.json`);
   };
 
   // Finish Scanning and Start Reconstruction
@@ -613,9 +608,17 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         project = newProject(`${OBJECT_PRESETS[selectedCategory].name} Scan`);
       }
 
+      const realDataUrl = glbDataUrl.startsWith('data:')
+        ? glbDataUrl
+        : await blobToDataUrl(glbBlob);
+
+      if (glbDataUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(glbDataUrl);
+      }
+
       const modelObject = newObject('model');
       modelObject.name = `${OBJECT_PRESETS[selectedCategory].name} Model`;
-      modelObject.model = glbDataUrl;
+      modelObject.model = realDataUrl;
       modelObject.position = [0, 0.5, 0];
 
       const updatedProject: Project = {
@@ -643,9 +646,17 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         project = newProject('Scanned AR Experience');
       }
 
+      const realDataUrl = glbDataUrl.startsWith('data:')
+        ? glbDataUrl
+        : await blobToDataUrl(glbBlob);
+
+      if (glbDataUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(glbDataUrl);
+      }
+
       const modelObject = newObject('model');
       modelObject.name = `${OBJECT_PRESETS[selectedCategory].name} AR Object`;
-      modelObject.model = glbDataUrl;
+      modelObject.model = realDataUrl;
       modelObject.position = [0, 0, -1.2];
 
       const updatedProject: Project = {

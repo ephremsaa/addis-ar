@@ -39,6 +39,7 @@ import {
   type SceneObject,
   type TrackingMode,
   trackingModes,
+  download,
 } from '@/lib/ar/projects';
 
 interface ARWorkspaceProps {
@@ -1079,11 +1080,7 @@ export function ARWorkspace({
               onClick={() => {
                 const svg = MarkerDetector.generateMarkerSVG(1, 400);
                 const blob = new Blob([svg], { type: 'image/svg+xml' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'addis-ar-marker-1.svg';
-                a.click();
+                download(blob, 'addis-ar-marker-1.svg');
               }}
             >
               <Download size={13} className="mr-1.5" />

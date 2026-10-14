@@ -19,6 +19,7 @@ import { type SparsePointCloud } from './sparse-point-cloud';
 import { cleanReconstructedMesh, type MeshCleanerReport } from './mesh-cleaner';
 import { mapMultiViewTextures } from './texture-mapper';
 import { generateQualityReport } from './quality-report';
+import { blobToDataUrl } from '@/lib/ar/projects';
 
 export interface ReconstructionOptions {
   preset?: QualityPreset;
@@ -338,7 +339,7 @@ export async function reconstruct3DModel(
   }
 
   const glbBlob = new Blob([glbBuffer], { type: 'model/gltf-binary' });
-  const glbDataUrl = URL.createObjectURL(glbBlob);
+  const glbDataUrl = await blobToDataUrl(glbBlob);
 
   const posAttr = optimizedGeometry.getAttribute('position');
   const vertexCount = posAttr ? posAttr.count : 0;

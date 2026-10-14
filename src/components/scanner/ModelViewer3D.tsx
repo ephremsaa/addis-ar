@@ -27,7 +27,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import type { ModelCleanupOptions } from '@/lib/scanner/types';
 import { optimizeMesh } from '@/lib/scanner/mesh-optimizer';
-import { download } from '@/lib/ar/projects';
+import { download, blobToDataUrl } from '@/lib/ar/projects';
 
 interface ModelViewer3DProps {
   initialGeometry: THREE.BufferGeometry;
@@ -301,7 +301,7 @@ export function ModelViewer3D({
     }
 
     const blob = new Blob([buffer], { type: 'model/gltf-binary' });
-    const dataUrl = URL.createObjectURL(blob);
+    const dataUrl = await blobToDataUrl(blob);
     return { blob, dataUrl };
   };
 
