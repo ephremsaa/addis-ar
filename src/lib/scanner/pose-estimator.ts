@@ -1,6 +1,6 @@
-import * as THREE from 'three';
-import type { ScanPhoto } from './types';
-import { generateSparsePointCloud, type SparsePointCloud } from './sparse-point-cloud';
+import * as THREE from "three";
+import type { ScanPhoto } from "./types";
+import { generateSparsePointCloud, type SparsePointCloud } from "./sparse-point-cloud";
 
 export interface Keypoint {
   x: number;
@@ -52,14 +52,38 @@ export interface PoseEstimationSummary {
 
 // 32 pre-selected pair offsets for binary descriptor sampling (BRIEF-style)
 const BRIEF_PAIRS: Array<[number, number, number, number]> = [
-  [-7, -7, 7, 7], [-5, -2, 3, 4], [-3, 6, 4, -5], [-7, 2, 7, -2],
-  [-2, -6, 2, 6], [1, -7, -1, 7], [-4, -4, 4, 4], [-6, 3, 6, -3],
-  [-1, -5, 1, 5], [3, -6, -3, 6], [-5, 5, 5, -5], [-7, 0, 7, 0],
-  [0, -7, 0, 7], [-3, -3, 3, 3], [-6, -1, 6, 1], [-2, 5, 2, -5],
-  [-8, 2, 8, -2], [-4, 7, 4, -7], [2, -8, -2, 8], [-5, -5, 5, 5],
-  [6, -4, -6, 4], [-7, -3, 7, 3], [3, 7, -3, -7], [-1, -8, 1, 8],
-  [5, -2, -5, 2], [-8, 0, 8, 0], [0, -8, 0, 8], [-4, -6, 4, 6],
-  [6, 2, -6, -2], [-2, -7, 2, 7], [7, -4, -7, 4], [-3, 5, 3, -5],
+  [-7, -7, 7, 7],
+  [-5, -2, 3, 4],
+  [-3, 6, 4, -5],
+  [-7, 2, 7, -2],
+  [-2, -6, 2, 6],
+  [1, -7, -1, 7],
+  [-4, -4, 4, 4],
+  [-6, 3, 6, -3],
+  [-1, -5, 1, 5],
+  [3, -6, -3, 6],
+  [-5, 5, 5, -5],
+  [-7, 0, 7, 0],
+  [0, -7, 0, 7],
+  [-3, -3, 3, 3],
+  [-6, -1, 6, 1],
+  [-2, 5, 2, -5],
+  [-8, 2, 8, -2],
+  [-4, 7, 4, -7],
+  [2, -8, -2, 8],
+  [-5, -5, 5, 5],
+  [6, -4, -6, 4],
+  [-7, -3, 7, 3],
+  [3, 7, -3, -7],
+  [-1, -8, 1, 8],
+  [5, -2, -5, 2],
+  [-8, 0, 8, 0],
+  [0, -8, 0, 8],
+  [-4, -6, 4, 6],
+  [6, 2, -6, -2],
+  [-2, -7, 2, 7],
+  [7, -4, -7, 4],
+  [-3, 5, 3, -5],
 ];
 
 /**
@@ -69,7 +93,7 @@ export function extractKeypoints(
   ctx: CanvasRenderingContext2D,
   width: number,
   height: number,
-  maxKeypoints: number = 320
+  maxKeypoints: number = 320,
 ): Keypoint[] {
   const imgData = ctx.getImageData(0, 0, width, height);
   const data = imgData.data;
@@ -78,7 +102,9 @@ export function extractKeypoints(
   const gray = new Uint8Array(width * height);
   for (let i = 0; i < gray.length; i++) {
     const idx = i * 4;
-    gray[i] = Math.round(0.299 * (data[idx] ?? 0) + 0.587 * (data[idx + 1] ?? 0) + 0.114 * (data[idx + 2] ?? 0));
+    gray[i] = Math.round(
+      0.299 * (data[idx] ?? 0) + 0.587 * (data[idx + 1] ?? 0) + 0.114 * (data[idx + 2] ?? 0),
+    );
   }
 
   const corners: Array<{ x: number; y: number; score: number }> = [];
@@ -87,8 +113,22 @@ export function extractKeypoints(
 
   // FAST-inspired circular ring offsets (radius 3)
   const circleOffsets: Array<[number, number]> = [
-    [0, 3], [1, 3], [2, 2], [3, 1], [3, 0], [3, -1], [2, -2], [1, -3],
-    [0, -3], [-1, -3], [-2, -2], [-3, -1], [-3, 0], [-3, 1], [-2, 2], [-1, 3]
+    [0, 3],
+    [1, 3],
+    [2, 2],
+    [3, 1],
+    [3, 0],
+    [3, -1],
+    [2, -2],
+    [1, -3],
+    [0, -3],
+    [-1, -3],
+    [-2, -2],
+    [-3, -1],
+    [-3, 0],
+    [-3, 1],
+    [-2, 2],
+    [-1, 3],
   ];
 
   for (let y = border; y < height - border; y += 2) {
@@ -196,7 +236,7 @@ function hammingDistance(d1: Uint8Array, d2: Uint8Array): number {
 export function matchFeatures(
   kp1: Keypoint[],
   kp2: Keypoint[],
-  ratioThreshold: number = 0.8
+  ratioThreshold: number = 0.8,
 ): FeatureMatch[] {
   const matches: FeatureMatch[] = [];
 
@@ -237,7 +277,7 @@ export function ransacEpipolarFilter(
   width: number,
   height: number,
   iterations: number = 50,
-  distanceThresholdPx: number = 4.0
+  distanceThresholdPx: number = 4.0,
 ): { inliers: FeatureMatch[]; reprojectionError: number } {
   if (matches.length < 8) {
     return { inliers: matches, reprojectionError: 2.0 };
@@ -291,9 +331,7 @@ export function ransacEpipolarFilter(
 
   const finalInliers = bestInliers.length >= 6 ? bestInliers : matches;
   const meanErr =
-    finalInliers.length > 0
-      ? Number((bestErrorSum / finalInliers.length).toFixed(2))
-      : 3.5;
+    finalInliers.length > 0 ? Number((bestErrorSum / finalInliers.length).toFixed(2)) : 3.5;
 
   return {
     inliers: finalInliers,
@@ -307,16 +345,16 @@ export function ransacEpipolarFilter(
  */
 export async function estimateMultiViewCameraPoses(
   photos: ScanPhoto[],
-  onProgress?: (step: string, pct: number) => void
+  onProgress?: (step: string, pct: number) => void,
 ): Promise<PoseEstimationSummary> {
   const totalPhotos = photos.length;
   const warnings: string[] = [];
   const poses: EstimatedCameraPose[] = [];
 
-  const analysisCanvas = document.createElement('canvas');
+  const analysisCanvas = document.createElement("canvas");
   analysisCanvas.width = 320;
   analysisCanvas.height = 240;
-  const analysisCtx = analysisCanvas.getContext('2d', { willReadFrequently: true })!;
+  const analysisCtx = analysisCanvas.getContext("2d", { willReadFrequently: true })!;
 
   const photoKeypoints: Array<{
     photo: ScanPhoto;
@@ -338,10 +376,10 @@ export async function estimateMultiViewCameraPoses(
     const kps = extractKeypoints(analysisCtx, analysisCanvas.width, analysisCanvas.height, 300);
 
     const maskImg = await loadImage(photo.maskDataUrl || photo.dataUrl);
-    const maskCanvas = document.createElement('canvas');
+    const maskCanvas = document.createElement("canvas");
     maskCanvas.width = 160;
     maskCanvas.height = Math.round((maskImg.height / maskImg.width) * 160);
-    const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true })!;
+    const maskCtx = maskCanvas.getContext("2d", { willReadFrequently: true })!;
     maskCtx.drawImage(maskImg, 0, 0, maskCanvas.width, maskCanvas.height);
 
     photoKeypoints.push({
@@ -352,7 +390,10 @@ export async function estimateMultiViewCameraPoses(
       maskCtx,
     });
 
-    onProgress?.(`Extracted ${kps.length} keypoints from photo ${i + 1}/${totalPhotos}`, Math.round((i / totalPhotos) * 30));
+    onProgress?.(
+      `Extracted ${kps.length} keypoints from photo ${i + 1}/${totalPhotos}`,
+      Math.round((i / totalPhotos) * 30),
+    );
   }
 
   // Detect whether photos were uploaded as an arbitrary sequence with repeating or uncalibrated angles
@@ -374,11 +415,22 @@ export async function estimateMultiViewCameraPoses(
     const nextPk = photoKeypoints[nextIdx];
     if (!curPk || !nextPk) continue;
     const rawMatches = matchFeatures(curPk.keypoints, nextPk.keypoints);
-    const { inliers, reprojectionError } = ransacEpipolarFilter(rawMatches, analysisCanvas.width, analysisCanvas.height);
-    const inlierRatio = rawMatches.length > 0 ? Number((inliers.length / rawMatches.length).toFixed(3)) : 0;
+    const { inliers, reprojectionError } = ransacEpipolarFilter(
+      rawMatches,
+      analysisCanvas.width,
+      analysisCanvas.height,
+    );
+    const inlierRatio =
+      rawMatches.length > 0 ? Number((inliers.length / rawMatches.length).toFixed(3)) : 0;
 
     if (inliers.length >= 6) {
-      pairwiseMatches.push({ camIdx1: i, camIdx2: nextIdx, matches: inliers, reprojectionError, inlierRatio });
+      pairwiseMatches.push({
+        camIdx1: i,
+        camIdx2: nextIdx,
+        matches: inliers,
+        reprojectionError,
+        inlierRatio,
+      });
     }
 
     // Multi-hop (skip 1) for strong geometric baseline
@@ -387,10 +439,21 @@ export async function estimateMultiViewCameraPoses(
       const skipPk = photoKeypoints[skipIdx];
       if (!skipPk) continue;
       const skipMatches = matchFeatures(curPk.keypoints, skipPk.keypoints);
-      const { inliers: skipInliers, reprojectionError: skipReprojErr } = ransacEpipolarFilter(skipMatches, analysisCanvas.width, analysisCanvas.height);
-      const skipInlierRatio = skipMatches.length > 0 ? Number((skipInliers.length / skipMatches.length).toFixed(3)) : 0;
+      const { inliers: skipInliers, reprojectionError: skipReprojErr } = ransacEpipolarFilter(
+        skipMatches,
+        analysisCanvas.width,
+        analysisCanvas.height,
+      );
+      const skipInlierRatio =
+        skipMatches.length > 0 ? Number((skipInliers.length / skipMatches.length).toFixed(3)) : 0;
       if (skipInliers.length >= 8) {
-        pairwiseMatches.push({ camIdx1: i, camIdx2: skipIdx, matches: skipInliers, reprojectionError: skipReprojErr, inlierRatio: skipInlierRatio });
+        pairwiseMatches.push({
+          camIdx1: i,
+          camIdx2: skipIdx,
+          matches: skipInliers,
+          reprojectionError: skipReprojErr,
+          inlierRatio: skipInlierRatio,
+        });
       }
     }
   }
@@ -405,21 +468,14 @@ export async function estimateMultiViewCameraPoses(
     if (!curr) continue;
     const prevIdx = (i - 1 + photoKeypoints.length) % photoKeypoints.length;
     const pair = pairwiseMatches.find(
-      (m) => (m.camIdx1 === prevIdx && m.camIdx2 === i) || (m.camIdx1 === i && m.camIdx2 === prevIdx)
+      (m) =>
+        (m.camIdx1 === prevIdx && m.camIdx2 === i) || (m.camIdx1 === i && m.camIdx2 === prevIdx),
     );
 
     const inliers = pair ? pair.matches : [];
     // Compute real measured values from epipolar inlier filtering instead of hardcoded 1.8 / 3.8 and 0.85 / 0.35
-    const reprojectionError = pair
-      ? pair.reprojectionError
-      : inliers.length >= 6
-        ? 2.1
-        : 4.2;
-    const inlierRatio = pair
-      ? pair.inlierRatio
-      : inliers.length >= 6
-        ? 0.75
-        : 0.25;
+    const reprojectionError = pair ? pair.reprojectionError : inliers.length >= 6 ? 2.1 : 4.2;
+    const inlierRatio = pair ? pair.inlierRatio : inliers.length >= 6 ? 0.75 : 0.25;
     const isRegistered = inliers.length >= 6 || totalPhotos <= 3;
 
     if (!isRegistered) {
@@ -514,7 +570,10 @@ export async function estimateMultiViewCameraPoses(
       maskContext: curr.maskCtx,
     });
 
-    onProgress?.(`Solved camera pose ${i + 1}/${totalPhotos}`, 30 + Math.round((i / totalPhotos) * 30));
+    onProgress?.(
+      `Solved camera pose ${i + 1}/${totalPhotos}`,
+      30 + Math.round((i / totalPhotos) * 30),
+    );
   }
 
   // Stage 4: Generate Verified 3D Sparse Point Cloud
@@ -522,14 +581,18 @@ export async function estimateMultiViewCameraPoses(
     poses,
     pairwiseMatches,
     analysisCanvas.width,
-    analysisCanvas.height
+    analysisCanvas.height,
   );
 
-  const registrationRate = totalPhotos > 0 ? Math.round((registeredCount / totalPhotos) * 100) : 100;
-  const meanReprojectionError = totalPhotos > 0 ? Number((errorAccumulator / totalPhotos).toFixed(2)) : 1.2;
+  const registrationRate =
+    totalPhotos > 0 ? Math.round((registeredCount / totalPhotos) * 100) : 100;
+  const meanReprojectionError =
+    totalPhotos > 0 ? Number((errorAccumulator / totalPhotos).toFixed(2)) : 1.2;
 
   if (registrationRate < 50) {
-    warnings.push(`Only ${registrationRate}% of camera poses could be aligned. Retake photos with more overlapping angles.`);
+    warnings.push(
+      `Only ${registrationRate}% of camera poses could be aligned. Retake photos with more overlapping angles.`,
+    );
   }
 
   return {
@@ -548,9 +611,9 @@ export async function estimateMultiViewCameraPoses(
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image for pose estimation'));
+    img.onerror = () => reject(new Error("Failed to load image for pose estimation"));
     img.src = src;
   });
 }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React from "react";
 import {
   CheckCircle2,
   AlertTriangle,
@@ -13,15 +13,17 @@ import {
   ChevronRight,
   Info,
   X,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import type { QualityReport } from '@/lib/scanner/types';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { QualityReport } from "@/lib/scanner/types";
 
 interface QualityReportModalProps {
   report: QualityReport;
   isOpen: boolean;
   onClose: () => void;
-  onRetry?: (strategy: 'filter-blurry' | 'relax-features' | 'conservative-carving' | 'recompute-textures') => void;
+  onRetry?: (
+    strategy: "filter-blurry" | "relax-features" | "conservative-carving" | "recompute-textures",
+  ) => void;
   onContinue: () => void;
 }
 
@@ -34,23 +36,24 @@ export function QualityReportModal({
 }: QualityReportModalProps) {
   if (!isOpen) return null;
 
-  const { status, score, summary, metrics, diagnostics, suggestedActions, retryRecommendation } = report;
+  const { status, score, summary, metrics, diagnostics, suggestedActions, retryRecommendation } =
+    report;
 
   const statusBadge = {
     Good: {
-      bg: 'bg-emerald-500/15 border-emerald-500/30 text-emerald-400',
+      bg: "bg-emerald-500/15 border-emerald-500/30 text-emerald-400",
       icon: <CheckCircle2 className="w-5 h-5 text-emerald-400" />,
-      label: 'Good Reconstruction',
+      label: "Good Reconstruction",
     },
-    'Needs improvement': {
-      bg: 'bg-amber-500/15 border-amber-500/30 text-amber-400',
+    "Needs improvement": {
+      bg: "bg-amber-500/15 border-amber-500/30 text-amber-400",
       icon: <AlertTriangle className="w-5 h-5 text-amber-400" />,
-      label: 'Needs Improvement',
+      label: "Needs Improvement",
     },
-    'Reconstruction failed': {
-      bg: 'bg-rose-500/15 border-rose-500/30 text-rose-400',
+    "Reconstruction failed": {
+      bg: "bg-rose-500/15 border-rose-500/30 text-rose-400",
       icon: <XCircle className="w-5 h-5 text-rose-400" />,
-      label: 'Reconstruction Failed',
+      label: "Reconstruction Failed",
     },
   }[status];
 
@@ -60,21 +63,19 @@ export function QualityReportModal({
         {/* Header */}
         <div className="flex items-center justify-between p-4 lg:p-5 border-b border-border/60 bg-muted/20">
           <div className="flex items-center gap-3">
-            <div className={`p-2 rounded-xl border ${statusBadge.bg}`}>
-              {statusBadge.icon}
-            </div>
+            <div className={`p-2 rounded-xl border ${statusBadge.bg}`}>{statusBadge.icon}</div>
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-base lg:text-lg font-bold text-foreground">
                   Reconstruction Quality Report
                 </h2>
-                <span className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${statusBadge.bg}`}>
+                <span
+                  className={`text-xs px-2.5 py-0.5 rounded-full font-semibold border ${statusBadge.bg}`}
+                >
                   {statusBadge.label}
                 </span>
               </div>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                {summary}
-              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">{summary}</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={onClose} className="rounded-full">
@@ -89,7 +90,11 @@ export function QualityReportModal({
             <Info className="w-4 h-4 text-blue-400 shrink-0 mt-0.5" />
             <div className="text-xs text-blue-200/90 leading-relaxed">
               <span className="font-semibold text-blue-300">Camera Pose Note: </span>
-              In browser scanning mode, camera poses are computed from guided-capture orbit angles and optical baseline fine-tuning rather than full Structure-from-Motion (SfM) bundle adjustment. Reprojection error and inlier rates are estimated from epipolar feature matching. For full SfM camera solving, switch to the Self-Hosted COLMAP engine in Settings.
+              In browser scanning mode, camera poses are computed from guided-capture orbit angles
+              and optical baseline fine-tuning rather than full Structure-from-Motion (SfM) bundle
+              adjustment. Reprojection error and inlier rates are estimated from epipolar feature
+              matching. For full SfM camera solving, switch to the Self-Hosted COLMAP engine in
+              Settings.
             </div>
           </div>
 
@@ -100,7 +105,8 @@ export function QualityReportModal({
                 Reconstruction Fidelity Score
               </span>
               <p className="text-xs text-muted-foreground">
-                Derived directly from camera registration, estimated reprojection error, and mesh surface density.
+                Derived directly from camera registration, estimated reprojection error, and mesh
+                surface density.
               </p>
             </div>
             <div className="flex items-baseline gap-1 bg-purple-900/40 px-3 py-1.5 rounded-xl border border-purple-500/30">
@@ -114,20 +120,25 @@ export function QualityReportModal({
             <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
               <span className="text-[11px] text-muted-foreground block">Camera Registration</span>
               <div className="text-sm font-bold text-foreground mt-0.5">
-                {metrics.registeredCameras} / {metrics.totalPhotos} ({metrics.registrationPercentage}%)
+                {metrics.registeredCameras} / {metrics.totalPhotos} (
+                {metrics.registrationPercentage}%)
               </div>
               <span className="text-[10px] text-emerald-400">
-                {metrics.registrationPercentage >= 80 ? '✓ High alignment' : '⚠ Partial alignment'}
+                {metrics.registrationPercentage >= 80 ? "✓ High alignment" : "⚠ Partial alignment"}
               </span>
             </div>
 
             <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
-              <span className="text-[11px] text-muted-foreground block">Reprojection Error (Est.)</span>
+              <span className="text-[11px] text-muted-foreground block">
+                Reprojection Error (Est.)
+              </span>
               <div className="text-sm font-bold text-foreground mt-0.5">
                 ~{metrics.meanReprojectionErrorPx} px
               </div>
               <span className="text-[10px] text-muted-foreground">
-                {metrics.meanReprojectionErrorPx <= 3.0 ? '✓ Estimated sharp rays' : '⚠ High deviation (est.)'}
+                {metrics.meanReprojectionErrorPx <= 3.0
+                  ? "✓ Estimated sharp rays"
+                  : "⚠ High deviation (est.)"}
               </span>
             </div>
 
@@ -161,7 +172,7 @@ export function QualityReportModal({
               <span className="text-[11px] text-muted-foreground block">GLB 2.0 Export</span>
               <div className="text-sm font-bold text-emerald-400 mt-0.5 flex items-center gap-1">
                 <ShieldCheck className="w-3.5 h-3.5" />
-                {metrics.exportValid ? 'Verified Valid' : 'Invalid'}
+                {metrics.exportValid ? "Verified Valid" : "Invalid"}
               </div>
               <span className="text-[10px] text-muted-foreground">Standard binary glTF</span>
             </div>

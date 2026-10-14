@@ -1,10 +1,10 @@
-import { CameraManager, type CameraStatus, type CameraDeviceInfo } from './camera-manager';
-import { TrackingManager, type TrackingReport } from './tracking-manager';
-import { TargetManager, type LockedTargetData } from './target-manager';
-import { ARSceneRenderer } from './ar-scene-renderer';
-import { PlacementController } from './placement-controller';
-import { download, type SceneObject, type TrackingMode } from './projects';
-import type { TrackabilityReport } from './vision/target-analyzer';
+import { CameraManager, type CameraStatus, type CameraDeviceInfo } from "./camera-manager";
+import { TrackingManager, type TrackingReport } from "./tracking-manager";
+import { TargetManager, type LockedTargetData } from "./target-manager";
+import { ARSceneRenderer } from "./ar-scene-renderer";
+import { PlacementController } from "./placement-controller";
+import { download, type SceneObject, type TrackingMode } from "./projects";
+import type { TrackabilityReport } from "./vision/target-analyzer";
 
 export interface ARSessionState {
   cameraStatus: CameraStatus;
@@ -14,7 +14,7 @@ export interface ARSessionState {
   lockedTarget: LockedTargetData | null;
   availableCameras: CameraDeviceInfo[];
   selectedCameraId: string;
-  facingMode: 'environment' | 'user';
+  facingMode: "environment" | "user";
   isWebXRSupported: boolean;
 }
 
@@ -39,7 +39,7 @@ export class ARSessionManager {
     this.unsubs.push(
       this.camera.subscribe(() => this.notifyState()),
       this.tracking.subscribe(() => this.notifyState()),
-      this.target.subscribe(() => this.notifyState())
+      this.target.subscribe(() => this.notifyState()),
     );
   }
 
@@ -77,7 +77,7 @@ export class ARSessionManager {
     viewportContainer: HTMLElement,
     videoElement: HTMLVideoElement,
     initialObjects: SceneObject[] = [],
-    selectedId = ''
+    selectedId = "",
   ): Promise<void> {
     this.camera.attachVideoElement(videoElement);
 
@@ -168,7 +168,7 @@ export class ARSessionManager {
   /**
    * Updates 3D scene objects inside the renderer.
    */
-  public async updateObjects(objects: SceneObject[], selectedId = ''): Promise<void> {
+  public async updateObjects(objects: SceneObject[], selectedId = ""): Promise<void> {
     if (this.renderer) {
       await this.renderer.setObjects(objects, selectedId);
     }
@@ -184,7 +184,7 @@ export class ARSessionManager {
   /**
    * Captures a high-resolution composite screenshot of the camera + AR scene overlay.
    */
-  public async captureScreenshot(projectName = 'experience'): Promise<void> {
+  public async captureScreenshot(projectName = "experience"): Promise<void> {
     const vid = this.camera.getVideoElement();
     const webglCanvas = this.renderer?.getCanvas();
     if (!vid || !webglCanvas) return;
@@ -192,10 +192,10 @@ export class ARSessionManager {
     const width = vid.videoWidth || webglCanvas.width || 1280;
     const height = vid.videoHeight || webglCanvas.height || 720;
 
-    const compositeCanvas = document.createElement('canvas');
+    const compositeCanvas = document.createElement("canvas");
     compositeCanvas.width = width;
     compositeCanvas.height = height;
-    const ctx = compositeCanvas.getContext('2d');
+    const ctx = compositeCanvas.getContext("2d");
     if (!ctx) return;
 
     // 1. Draw live camera frame
@@ -205,19 +205,19 @@ export class ARSessionManager {
     ctx.drawImage(webglCanvas, 0, 0, width, height);
 
     // 3. Brand watermark
-    ctx.fillStyle = 'rgba(25, 25, 30, 0.7)';
+    ctx.fillStyle = "rgba(25, 25, 30, 0.7)";
     ctx.roundRect(24, height - 56, 170, 32, 6);
     ctx.fill();
     ctx.font = 'bold 12px "Manrope", sans-serif';
-    ctx.fillStyle = '#ffffff';
-    ctx.fillText('ADDIS AR · CREATIVE', 36, height - 36);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillText("ADDIS AR · CREATIVE", 36, height - 36);
 
     const blob = await new Promise<Blob | null>((resolve) =>
-      compositeCanvas.toBlob(resolve, 'image/png')
+      compositeCanvas.toBlob(resolve, "image/png"),
     );
 
     if (blob) {
-      download(blob, `${projectName.replace(/\s+/g, '-').toLowerCase()}-ar-capture.png`);
+      download(blob, `${projectName.replace(/\s+/g, "-").toLowerCase()}-ar-capture.png`);
     }
   }
 

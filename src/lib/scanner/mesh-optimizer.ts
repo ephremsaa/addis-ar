@@ -1,6 +1,6 @@
-import * as THREE from 'three';
-import type { ModelCleanupOptions } from './types';
-import { cleanReconstructedMesh } from './mesh-cleaner';
+import * as THREE from "three";
+import type { ModelCleanupOptions } from "./types";
+import { cleanReconstructedMesh } from "./mesh-cleaner";
 
 /**
  * Optimizes and cleans up reconstructed 3D mesh:
@@ -12,7 +12,7 @@ import { cleanReconstructedMesh } from './mesh-cleaner';
  */
 export function optimizeMesh(
   geometry: THREE.BufferGeometry,
-  options: ModelCleanupOptions
+  options: ModelCleanupOptions,
 ): THREE.BufferGeometry {
   let geo = geometry.clone();
 
@@ -34,11 +34,7 @@ export function optimizeMesh(
 
   // Offset to center X and Z
   const offsetY =
-    options.origin === 'bottom'
-      ? -box.min.y
-      : options.origin === 'top'
-        ? -box.max.y
-        : -center.y;
+    options.origin === "bottom" ? -box.min.y : options.origin === "top" ? -box.max.y : -center.y;
 
   geo.translate(-center.x, offsetY, -center.z);
 
@@ -63,7 +59,7 @@ export function optimizeMesh(
  * Keeps only the largest connected component in the mesh, eliminating floating scan noise.
  */
 function removeFloatingIslands(geometry: THREE.BufferGeometry): THREE.BufferGeometry {
-  const pos = geometry.getAttribute('position');
+  const pos = geometry.getAttribute("position");
   if (!pos || pos.count < 9) return geometry;
 
   const numTriangles = Math.floor(pos.count / 3);
@@ -107,7 +103,7 @@ function removeFloatingIslands(geometry: THREE.BufferGeometry): THREE.BufferGeom
   }
 
   const newPos: number[] = [];
-  const uvAttr = geometry.getAttribute('uv');
+  const uvAttr = geometry.getAttribute("uv");
   const newUv: number[] = [];
 
   for (const triIdx of validTriIndices) {
@@ -121,9 +117,9 @@ function removeFloatingIslands(geometry: THREE.BufferGeometry): THREE.BufferGeom
   }
 
   const cleanGeo = new THREE.BufferGeometry();
-  cleanGeo.setAttribute('position', new THREE.Float32BufferAttribute(newPos, 3));
+  cleanGeo.setAttribute("position", new THREE.Float32BufferAttribute(newPos, 3));
   if (uvAttr && newUv.length > 0) {
-    cleanGeo.setAttribute('uv', new THREE.Float32BufferAttribute(newUv, 2));
+    cleanGeo.setAttribute("uv", new THREE.Float32BufferAttribute(newUv, 2));
   }
   cleanGeo.computeVertexNormals();
   return cleanGeo;
@@ -132,18 +128,15 @@ function removeFloatingIslands(geometry: THREE.BufferGeometry): THREE.BufferGeom
 /**
  * Spatial grid clustering decimation to simplify triangle count for mobile real-time rendering.
  */
-function simplifyMesh(
-  geometry: THREE.BufferGeometry,
-  ratio: number
-): THREE.BufferGeometry {
-  const pos = geometry.getAttribute('position');
+function simplifyMesh(geometry: THREE.BufferGeometry, ratio: number): THREE.BufferGeometry {
+  const pos = geometry.getAttribute("position");
   if (!pos || pos.count < 30) return geometry;
 
   // Grid step based on bounding box
   geometry.computeBoundingBox();
   const box = geometry.boundingBox!;
   const span = Math.max(box.max.x - box.min.x, box.max.y - box.min.y, box.max.z - box.min.z);
-  
+
   // Calculate cell size inversely proportional to ratio
   const gridCells = Math.max(12, Math.round(40 * Math.sqrt(ratio)));
   const cellSize = span / gridCells;
@@ -158,7 +151,7 @@ function simplifyMesh(
   };
 
   const newPositions: number[] = [];
-  const uvAttr = geometry.getAttribute('uv');
+  const uvAttr = geometry.getAttribute("uv");
   const newUvs: number[] = [];
 
   const triCount = Math.floor(pos.count / 3);
@@ -179,9 +172,12 @@ function simplifyMesh(
     newPositions.push(p1.x, p1.y, p1.z, p2.x, p2.y, p2.z, p3.x, p3.y, p3.z);
     if (uvAttr) {
       newUvs.push(
-        uvAttr.getX(i * 3), uvAttr.getY(i * 3),
-        uvAttr.getX(i * 3 + 1), uvAttr.getY(i * 3 + 1),
-        uvAttr.getX(i * 3 + 2), uvAttr.getY(i * 3 + 2)
+        uvAttr.getX(i * 3),
+        uvAttr.getY(i * 3),
+        uvAttr.getX(i * 3 + 1),
+        uvAttr.getY(i * 3 + 1),
+        uvAttr.getX(i * 3 + 2),
+        uvAttr.getY(i * 3 + 2),
       );
     }
   }
@@ -189,9 +185,9 @@ function simplifyMesh(
   if (newPositions.length < 30) return geometry; // Retain original if collapsed too much
 
   const simplified = new THREE.BufferGeometry();
-  simplified.setAttribute('position', new THREE.Float32BufferAttribute(newPositions, 3));
+  simplified.setAttribute("position", new THREE.Float32BufferAttribute(newPositions, 3));
   if (uvAttr && newUvs.length > 0) {
-    simplified.setAttribute('uv', new THREE.Float32BufferAttribute(newUvs, 2));
+    simplified.setAttribute("uv", new THREE.Float32BufferAttribute(newUvs, 2));
   }
   simplified.computeVertexNormals();
   return simplified;

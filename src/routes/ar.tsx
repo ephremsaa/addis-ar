@@ -1,24 +1,25 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { ARWorkspace } from '@/components/ar/ARWorkspace';
-import { listProjects, saveProject, newProject, type Project } from '@/lib/ar/projects';
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { ARWorkspace } from "@/components/ar/ARWorkspace";
+import { listProjects, saveProject, newProject, type Project } from "@/lib/ar/projects";
 
-export const Route = createFileRoute('/ar')({
+export const Route = createFileRoute("/ar")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: 'Camera AR · Addis AR' },
+      { title: "Camera AR · Addis AR" },
       {
-        name: 'description',
-        content: 'Open your camera, track real-world targets and place 3D experiences in WebAR with Addis AR.',
+        name: "description",
+        content:
+          "Open your camera, track real-world targets and place 3D experiences in WebAR with Addis AR.",
       },
-      { property: 'og:title', content: 'Camera AR · Addis AR' },
+      { property: "og:title", content: "Camera AR · Addis AR" },
       {
-        property: 'og:description',
-        content: 'Free, local-first WebAR camera tracking workspace.',
+        property: "og:description",
+        content: "Free, local-first WebAR camera tracking workspace.",
       },
-      { property: 'og:type', content: 'website' },
-      { name: 'twitter:card', content: 'summary_large_image' },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ARPage,
@@ -36,15 +37,18 @@ function ARPage() {
         if (list.length > 0) {
           // Sort by most recently updated
           list.sort((a, b) => b.updated - a.updated);
-          setProject(list[0]);
+          const first = list[0];
+          if (first) {
+            setProject(first);
+          }
         } else {
           // Create initial starter experience
-          const fresh = newProject('My AR Experience', 'Sculpture studio');
+          const fresh = newProject("My AR Experience", "Sculpture studio");
           await saveProject(fresh);
           setProject(fresh);
         }
       } catch (err) {
-        console.error('Failed to load project for AR:', err);
+        console.error("Failed to load project for AR:", err);
       } finally {
         setLoading(false);
       }
@@ -65,7 +69,7 @@ function ARPage() {
       <div className="flex min-h-screen flex-col items-center justify-center gap-4 bg-background text-foreground">
         <h2>No AR project available</h2>
         <button
-          onClick={() => navigate({ to: '/' })}
+          onClick={() => navigate({ to: "/" })}
           className="rounded bg-primary px-4 py-2 text-xs font-semibold text-primary-foreground"
         >
           Return to Dashboard
@@ -80,7 +84,7 @@ function ARPage() {
       onUpdateProject={async (updated) => {
         await saveProject(updated);
       }}
-      onReturnToEditor={() => navigate({ to: '/' })}
+      onReturnToEditor={() => navigate({ to: "/" })}
     />
   );
 }

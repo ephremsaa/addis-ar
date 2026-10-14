@@ -1,5 +1,5 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { useNavigate } from '@tanstack/react-router';
+import React, { useRef, useState, useEffect } from "react";
+import { useNavigate } from "@tanstack/react-router";
 import {
   Camera,
   RefreshCw,
@@ -36,41 +36,48 @@ import {
   Minimize,
   SlidersHorizontal,
   Info,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { toast } from 'sonner';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 import {
   type ScanPhoto,
   type AngleGroup,
   type QualityPreset,
   type ReconstructionStageInfo,
   SCAN_STEPS,
-} from '@/lib/scanner/types';
-import { validateImageQuality } from '@/lib/scanner/image-validator';
-import { segmentForeground } from '@/lib/scanner/background-segmenter';
-import { reconstruct3DModel, type ReconstructionResult } from '@/lib/scanner/reconstruction-engine';
-import { reconstructWithColmap, checkColmapServerHealth } from '@/lib/scanner/colmap-client';
+} from "@/lib/scanner/types";
+import { validateImageQuality } from "@/lib/scanner/image-validator";
+import { segmentForeground } from "@/lib/scanner/background-segmenter";
+import { reconstruct3DModel, type ReconstructionResult } from "@/lib/scanner/reconstruction-engine";
+import { reconstructWithColmap, checkColmapServerHealth } from "@/lib/scanner/colmap-client";
 import {
   ContinuousScanRecorder,
   processRecordedFramesToPhotos,
   exportScanDataset,
   importScanDataset,
   type RecordingGuidance,
-} from '@/lib/scanner/continuous-recorder';
-import { SectorCoverageRadar } from './SectorCoverageRadar';
-import { MaskTouchupModal } from './MaskTouchupModal';
-import { ModelViewer3D } from './ModelViewer3D';
-import { QualityReportModal } from './QualityReportModal';
-import { ReconstructionDebugModal } from './ReconstructionDebugModal';
-import { newProject, newObject, saveProject, download, blobToDataUrl, type Project } from '@/lib/ar/projects';
+} from "@/lib/scanner/continuous-recorder";
+import { SectorCoverageRadar } from "./SectorCoverageRadar";
+import { MaskTouchupModal } from "./MaskTouchupModal";
+import { ModelViewer3D } from "./ModelViewer3D";
+import { QualityReportModal } from "./QualityReportModal";
+import { ReconstructionDebugModal } from "./ReconstructionDebugModal";
+import {
+  newProject,
+  newObject,
+  saveProject,
+  download,
+  blobToDataUrl,
+  type Project,
+} from "@/lib/ar/projects";
 
 interface ScannerWorkspaceProps {
   onClose?: () => void;
   targetProject?: Project | undefined;
 }
 
-export type ScannerScreen = 'intro' | 'camera' | 'processing' | 'result';
-export type ObjectCategory = 'food' | 'products' | 'shoes' | 'art' | 'general';
+export type ScannerScreen = "intro" | "camera" | "processing" | "result";
+export type ObjectCategory = "food" | "products" | "shoes" | "art" | "general";
 
 const OBJECT_PRESETS: Record<
   ObjectCategory,
@@ -82,77 +89,77 @@ const OBJECT_PRESETS: Record<
   }
 > = {
   food: {
-    name: 'Food & Bakery',
+    name: "Food & Bakery",
     icon: Utensils,
-    description: 'Breads, cakes, burgers, fruit, prepared meals, and pastries.',
+    description: "Breads, cakes, burgers, fruit, prepared meals, and pastries.",
     tips: [
-      'Keep food item completely stationary on a plate or tabletop.',
-      'Use soft, diffuse room lighting — avoid harsh flash or single-point glare.',
-      'Include the plate or cutting board only if intended to be part of the model.',
-      'Capture Pass 1 at eye-level, then Pass 2 tilted 45° from above.',
+      "Keep food item completely stationary on a plate or tabletop.",
+      "Use soft, diffuse room lighting — avoid harsh flash or single-point glare.",
+      "Include the plate or cutting board only if intended to be part of the model.",
+      "Capture Pass 1 at eye-level, then Pass 2 tilted 45° from above.",
     ],
   },
   products: {
-    name: 'Products & Gadgets',
+    name: "Products & Gadgets",
     icon: Package,
-    description: 'Electronics, tools, cosmetics, bottles, and packaged goods.',
+    description: "Electronics, tools, cosmetics, bottles, and packaged goods.",
     tips: [
-      'Matte and textured objects yield highest photogrammetry confidence.',
-      'Avoid high-gloss chrome or clear glass surfaces.',
-      'Ensure 360° circular clearance around the object.',
+      "Matte and textured objects yield highest photogrammetry confidence.",
+      "Avoid high-gloss chrome or clear glass surfaces.",
+      "Ensure 360° circular clearance around the object.",
     ],
   },
   shoes: {
-    name: 'Shoes & Apparel',
+    name: "Shoes & Apparel",
     icon: Footprints,
-    description: 'Sneakers, boots, bags, leather goods, and accessories.',
+    description: "Sneakers, boots, bags, leather goods, and accessories.",
     tips: [
-      'Position shoes upright on a clean, contrasting surface.',
-      'Orbit close enough so the shoe fills ~70% of the scanning reticle.',
-      'Ensure side logos, stitching, and laces receive clean, sharp views.',
+      "Position shoes upright on a clean, contrasting surface.",
+      "Orbit close enough so the shoe fills ~70% of the scanning reticle.",
+      "Ensure side logos, stitching, and laces receive clean, sharp views.",
     ],
   },
   art: {
-    name: 'Art & Sculptures',
+    name: "Art & Sculptures",
     icon: Palette,
-    description: 'Pottery, carvings, figurines, ceramics, and statues.',
+    description: "Pottery, carvings, figurines, ceramics, and statues.",
     tips: [
-      'Intricate surface texture provides dense geometric feature matches.',
-      'Orbit smoothly to preserve subtle crevices and relief details.',
-      'Complete at least two full orbits (eye-level and upper elevation).',
+      "Intricate surface texture provides dense geometric feature matches.",
+      "Orbit smoothly to preserve subtle crevices and relief details.",
+      "Complete at least two full orbits (eye-level and upper elevation).",
     ],
   },
   general: {
-    name: 'General Object',
+    name: "General Object",
     icon: Box,
-    description: 'Any tabletop physical item with distinct surface texture.',
+    description: "Any tabletop physical item with distinct surface texture.",
     tips: [
-      'Orbit your phone around the object; avoid turning the object itself.',
-      'Move steadily to avoid motion blur and maintain optical overlap.',
-      'Aim for 20 to 60 captured views for maximum mesh detail.',
+      "Orbit your phone around the object; avoid turning the object itself.",
+      "Move steadily to avoid motion blur and maintain optical overlap.",
+      "Aim for 20 to 60 captured views for maximum mesh detail.",
     ],
   },
 };
 
 const PROCESSING_STAGES = [
-  { id: 'validating', label: '1. Validating captured images' },
-  { id: 'segmenting', label: '2. Removing unusable & blurry frames' },
-  { id: 'pose-estimation', label: '3. Estimating camera positions & tracking poses' },
-  { id: 'feature-matching', label: '4. Registering multi-view camera angles' },
-  { id: 'geometry-carving', label: '5. Building sparse 3D point cloud' },
-  { id: 'dense-geometry', label: '6. Building dense geometry & depth consensus' },
-  { id: 'marching-cubes', label: '7. Reconstructing volumetric mesh surface' },
-  { id: 'texturing', label: '8. Generating multi-view UV texture map' },
-  { id: 'cleanup', label: '9. Validating mesh geometry & manifold topology' },
-  { id: 'exporting', label: '10. Exporting production-ready binary GLB' },
+  { id: "validating", label: "1. Validating captured images" },
+  { id: "segmenting", label: "2. Removing unusable & blurry frames" },
+  { id: "pose-estimation", label: "3. Estimating camera positions & tracking poses" },
+  { id: "feature-matching", label: "4. Registering multi-view camera angles" },
+  { id: "geometry-carving", label: "5. Building sparse 3D point cloud" },
+  { id: "dense-geometry", label: "6. Building dense geometry & depth consensus" },
+  { id: "marching-cubes", label: "7. Reconstructing volumetric mesh surface" },
+  { id: "texturing", label: "8. Generating multi-view UV texture map" },
+  { id: "cleanup", label: "9. Validating mesh geometry & manifold topology" },
+  { id: "exporting", label: "10. Exporting production-ready binary GLB" },
 ];
 
 export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspaceProps) {
   const navigate = useNavigate();
 
   // App Workflow State
-  const [currentScreen, setCurrentScreen] = useState<ScannerScreen>('intro');
-  const [selectedCategory, setSelectedCategory] = useState<ObjectCategory>('food');
+  const [currentScreen, setCurrentScreen] = useState<ScannerScreen>("intro");
+  const [selectedCategory, setSelectedCategory] = useState<ObjectCategory>("food");
 
   // Video & Camera state
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -160,15 +167,15 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   const fileInputRef = useRef<HTMLInputElement>(null);
   const datasetInputRef = useRef<HTMLInputElement>(null);
 
-  const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
+  const [facingMode, setFacingMode] = useState<"environment" | "user">("environment");
   const [torchAvailable, setTorchAvailable] = useState<boolean>(false);
   const [torchOn, setTorchOn] = useState<boolean>(false);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
   const [cameraInitializing, setCameraInitializing] = useState<boolean>(false);
-  const [cameraError, setCameraError] = useState<string>('');
+  const [cameraError, setCameraError] = useState<string>("");
 
   // Scanning Guide / Reticle state
-  const [reticleShape, setReticleShape] = useState<'box' | 'circle' | 'oval'>('box');
+  const [reticleShape, setReticleShape] = useState<"box" | "circle" | "oval">("box");
   const [reticleScale, setReticleScale] = useState<number>(1.0);
   const [showReticleSettings, setShowReticleSettings] = useState<boolean>(false);
 
@@ -177,8 +184,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   const [isPaused, setIsPaused] = useState<boolean>(false);
   const recorderRef = useRef<ContinuousScanRecorder | null>(null);
   const [recordingGuidance, setRecordingGuidance] = useState<RecordingGuidance>({
-    status: 'optimal',
-    message: 'Position object inside guide and tap Start Continuous Scan.',
+    status: "optimal",
+    message: "Position object inside guide and tap Start Continuous Scan.",
     durationSeconds: 0,
     capturedFramesCount: 0,
     keyframeCount: 0,
@@ -189,31 +196,33 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     isWebXRActive: false,
   });
   const [isProcessingFrames, setIsProcessingFrames] = useState<boolean>(false);
-  const [frameProcessingMessage, setFrameProcessingMessage] = useState<string>('');
+  const [frameProcessingMessage, setFrameProcessingMessage] = useState<string>("");
 
   // Keyframes / Photo Dataset
   const [photos, setPhotos] = useState<ScanPhoto[]>([]);
   const [inspectPhoto, setInspectPhoto] = useState<ScanPhoto | null>(null);
   const [lastFeedbackToast, setLastFeedbackToast] = useState<{
-    type: 'success' | 'warning' | 'info';
+    type: "success" | "warning" | "info";
     text: string;
   } | null>(null);
 
   // Reconstruction State
-  const [preset, setPreset] = useState<QualityPreset>('standard');
+  const [preset, setPreset] = useState<QualityPreset>("standard");
   const [reconstructionStage, setReconstructionStage] = useState<ReconstructionStageInfo>({
-    stage: 'idle',
+    stage: "idle",
     progress: 0,
-    message: '',
+    message: "",
   });
-  const [reconstructionResult, setReconstructionResult] = useState<ReconstructionResult | null>(null);
+  const [reconstructionResult, setReconstructionResult] = useState<ReconstructionResult | null>(
+    null,
+  );
   const [showQualityReport, setShowQualityReport] = useState<boolean>(false);
   const [showDebugModal, setShowDebugModal] = useState<boolean>(false);
 
   // Settings & Modals
   const [showServerModal, setShowServerModal] = useState<boolean>(false);
-  const [reconstructionEngine, setReconstructionEngine] = useState<'browser' | 'colmap'>('browser');
-  const [serverUrl, setServerUrl] = useState<string>('http://localhost:8000');
+  const [reconstructionEngine, setReconstructionEngine] = useState<"browser" | "colmap">("browser");
+  const [serverUrl, setServerUrl] = useState<string>("http://localhost:8000");
   const [isTestingServer, setIsTestingServer] = useState<boolean>(false);
   const [serverTestStatus, setServerTestStatus] = useState<string | null>(null);
   const [showTips, setShowTips] = useState<boolean>(false);
@@ -244,7 +253,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   // Request & Start Camera
   const startCamera = async () => {
     stopCameraStream();
-    setCameraError('');
+    setCameraError("");
     setCameraInitializing(true);
 
     try {
@@ -264,23 +273,24 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       }
 
       setCameraActive(true);
-      setCurrentScreen('camera');
+      setCurrentScreen("camera");
 
       // Check torch capability
       const track = stream.getVideoTracks()[0];
-      if (track && 'getCapabilities' in track) {
-        const caps = (track as any).getCapabilities?.();
+      if (track && "getCapabilities" in track) {
+        const getCaps = (track as { getCapabilities?: () => { torch?: boolean } }).getCapabilities;
+        const caps = typeof getCaps === "function" ? getCaps.call(track) : undefined;
         setTorchAvailable(Boolean(caps?.torch));
       } else {
         setTorchAvailable(false);
       }
-    } catch (err: any) {
-      console.error('Camera initialization failed:', err);
+    } catch (err: unknown) {
+      console.error("Camera initialization failed:", err);
       setCameraActive(false);
-      const errorMsg =
-        err?.name === 'NotAllowedError'
-          ? 'Camera permission was denied. Please allow camera access in your browser settings to scan in real-time, or upload photos below.'
-          : 'Unable to start camera stream. Please ensure no other application is using the camera.';
+      const isNotAllowed = err instanceof Error && err.name === "NotAllowedError";
+      const errorMsg = isNotAllowed
+        ? "Camera permission was denied. Please allow camera access in your browser settings to scan in real-time, or upload photos below."
+        : "Unable to start camera stream. Please ensure no other application is using the camera.";
       setCameraError(errorMsg);
       toast.error(errorMsg);
     } finally {
@@ -290,7 +300,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
   // Switch rear/front camera
   const switchCamera = async () => {
-    const nextMode = facingMode === 'environment' ? 'user' : 'environment';
+    const nextMode = facingMode === "environment" ? "user" : "environment";
     setFacingMode(nextMode);
     stopCameraStream();
 
@@ -319,15 +329,24 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   // Toggle flashlight / torch
   const toggleTorch = async () => {
     const track = streamRef.current?.getVideoTracks()[0];
-    if (track && 'applyConstraints' in track) {
+    if (track && "applyConstraints" in track) {
       try {
-        await (track as any).applyConstraints({
-          advanced: [{ torch: !torchOn }],
-        });
-        setTorchOn(!torchOn);
+        const applyConstraints = (
+          track as {
+            applyConstraints?: (constraints: {
+              advanced?: Array<{ torch?: boolean }>;
+            }) => Promise<void>;
+          }
+        ).applyConstraints;
+        if (typeof applyConstraints === "function") {
+          await applyConstraints.call(track, {
+            advanced: [{ torch: !torchOn }],
+          });
+          setTorchOn(!torchOn);
+        }
       } catch (err) {
-        console.warn('Torch toggle failed:', err);
-        toast.error('Torch toggle is not supported on this camera device.');
+        console.warn("Torch toggle failed:", err);
+        toast.error("Torch toggle is not supported on this camera device.");
       }
     }
   };
@@ -349,13 +368,13 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         if (g.keyframeCount > previousKeyframeCount) {
           previousKeyframeCount = g.keyframeCount;
           setLastFeedbackToast({
-            type: 'success',
+            type: "success",
             text: `Good angle captured (${g.keyframeCount} views)`,
           });
-        } else if (g.status === 'too-fast') {
+        } else if (g.status === "too-fast") {
           setLastFeedbackToast({
-            type: 'warning',
-            text: 'Moving too fast — slow down for sharp views',
+            type: "warning",
+            text: "Moving too fast — slow down for sharp views",
           });
         }
       },
@@ -386,7 +405,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     setIsRecording(false);
     setIsPaused(false);
     setIsProcessingFrames(true);
-    setFrameProcessingMessage('Finalizing continuous recording frames…');
+    setFrameProcessingMessage("Finalizing continuous recording frames…");
 
     try {
       const frames = await recorderRef.current.stop();
@@ -397,12 +416,13 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         });
         setPhotos((prev) => [...prev, ...newPhotos]);
       }
-    } catch (err: any) {
-      console.error('Frame processing failed:', err);
-      toast.error('Frame processing failed: ' + (err?.message || 'Unknown error'));
+    } catch (err: unknown) {
+      console.error("Frame processing failed:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      toast.error("Frame processing failed: " + message);
     } finally {
       setIsProcessingFrames(false);
-      setFrameProcessingMessage('');
+      setFrameProcessingMessage("");
       recorderRef.current = null;
     }
   };
@@ -412,24 +432,24 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     const video = videoRef.current;
     if (!video || !cameraActive || video.videoWidth === 0) return;
 
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+    const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
 
     // Create thumbnail
-    const thumbCanvas = document.createElement('canvas');
+    const thumbCanvas = document.createElement("canvas");
     thumbCanvas.width = 160;
     thumbCanvas.height = 120;
-    const thumbCtx = thumbCanvas.getContext('2d');
+    const thumbCtx = thumbCanvas.getContext("2d");
     if (thumbCtx) {
       thumbCtx.drawImage(canvas, 0, 0, 160, 120);
     }
-    const thumbnailUrl = thumbCanvas.toDataURL('image/jpeg', 0.8);
+    const thumbnailUrl = thumbCanvas.toDataURL("image/jpeg", 0.8);
 
     const quality = await validateImageQuality(canvas);
     const seg = await segmentForeground(canvas);
@@ -439,7 +459,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       dataUrl,
       thumbnailUrl,
       timestamp: Date.now(),
-      angleGroup: 'front',
+      angleGroup: "front",
       azimuth: (photos.length * 25) % 360,
       elevation: 20,
       maskDataUrl: seg.maskDataUrl,
@@ -450,7 +470,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
     setPhotos((prev) => [...prev, newPhoto]);
     setLastFeedbackToast({
-      type: 'success',
+      type: "success",
       text: `Photo captured (${photos.length + 1} views)`,
     });
   };
@@ -477,24 +497,24 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         reader.readAsDataURL(file);
       });
 
-      const img = document.createElement('img');
+      const img = document.createElement("img");
       img.src = dataUrl;
       await new Promise((res) => {
         img.onload = res;
       });
 
-      const canvas = document.createElement('canvas');
+      const canvas = document.createElement("canvas");
       canvas.width = img.width;
       canvas.height = img.height;
-      const ctx = canvas.getContext('2d');
+      const ctx = canvas.getContext("2d");
       if (ctx) ctx.drawImage(img, 0, 0);
 
-      const thumbCanvas = document.createElement('canvas');
+      const thumbCanvas = document.createElement("canvas");
       thumbCanvas.width = 160;
       thumbCanvas.height = 120;
-      const thumbCtx = thumbCanvas.getContext('2d');
+      const thumbCtx = thumbCanvas.getContext("2d");
       if (thumbCtx) thumbCtx.drawImage(img, 0, 0, 160, 120);
-      const thumbnailUrl = thumbCanvas.toDataURL('image/jpeg', 0.8);
+      const thumbnailUrl = thumbCanvas.toDataURL("image/jpeg", 0.8);
 
       const quality = await validateImageQuality(canvas);
       const seg = await segmentForeground(canvas);
@@ -509,7 +529,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         dataUrl,
         thumbnailUrl,
         timestamp: Date.now(),
-        angleGroup: elevation >= 35 ? 'top-front' : 'front',
+        angleGroup: elevation >= 35 ? "top-front" : "front",
         azimuth,
         elevation,
         maskDataUrl: seg.maskDataUrl,
@@ -521,8 +541,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
     setPhotos((prev) => [...prev, ...newItems]);
     setIsProcessingFrames(false);
-    setFrameProcessingMessage('');
-    if (e.target) e.target.value = '';
+    setFrameProcessingMessage("");
+    if (e.target) e.target.value = "";
   };
 
   // Import Scan Dataset (.json)
@@ -532,19 +552,20 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
     try {
       setIsProcessingFrames(true);
-      setFrameProcessingMessage('Parsing imported scan dataset…');
+      setFrameProcessingMessage("Parsing imported scan dataset…");
       const importedPhotos = await importScanDataset(file);
       setPhotos((prev) => [...prev, ...importedPhotos]);
       setLastFeedbackToast({
-        type: 'success',
+        type: "success",
         text: `Imported ${importedPhotos.length} views from dataset`,
       });
-    } catch (err: any) {
-      toast.error(`Dataset import failed: ${err.message}`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : String(err);
+      toast.error(`Dataset import failed: ${message}`);
     } finally {
       setIsProcessingFrames(false);
-      setFrameProcessingMessage('');
-      if (e.target) e.target.value = '';
+      setFrameProcessingMessage("");
+      if (e.target) e.target.value = "";
     }
   };
 
@@ -560,7 +581,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
   // Finish Scanning and Start Reconstruction
   const finishScanAndReconstruct = async (
-    retryStrategy?: 'filter-blurry' | 'relax-features' | 'conservative-carving' | 'recompute-textures'
+    retryStrategy?:
+      "filter-blurry" | "relax-features" | "conservative-carving" | "recompute-textures",
   ) => {
     if (isRecording) {
       await stopContinuousScan();
@@ -568,45 +590,43 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     stopCameraStream();
 
     if (photos.length < 3) {
-      toast.error('Please capture or upload at least 3 photos from different angles to reconstruct a 3D model.');
+      toast.error(
+        "Please capture or upload at least 3 photos from different angles to reconstruct a 3D model.",
+      );
       return;
     }
 
-    setCurrentScreen('processing');
+    setCurrentScreen("processing");
     setReconstructionStage({
-      stage: 'validating',
+      stage: "validating",
       progress: 5,
-      message: 'Initializing multi-view photogrammetry pipeline…',
+      message: "Initializing multi-view photogrammetry pipeline…",
     });
 
     // Try Self-Hosted COLMAP Engine if selected
-    if (reconstructionEngine === 'colmap') {
+    if (reconstructionEngine === "colmap") {
       try {
         setReconstructionStage({
-          stage: 'validating',
+          stage: "validating",
           progress: 5,
-          message: 'Connecting to self-hosted COLMAP backend…',
+          message: "Connecting to self-hosted COLMAP backend…",
         });
-        const colmapResult = await reconstructWithColmap(
-          photos,
-          preset,
-          serverUrl,
-          (info) => {
-            setReconstructionStage(info);
-          }
-        );
+        const colmapResult = await reconstructWithColmap(photos, preset, serverUrl, (info) => {
+          setReconstructionStage(info);
+        });
         setReconstructionResult(colmapResult);
-        setCurrentScreen('result');
+        setCurrentScreen("result");
         return;
-      } catch (colmapErr: any) {
-        console.warn('COLMAP server error or unreachable:', colmapErr);
+      } catch (colmapErr: unknown) {
+        console.warn("COLMAP server error or unreachable:", colmapErr);
+        const colmapMsg = colmapErr instanceof Error ? colmapErr.message : "Connection failed";
         toast.error(
-          `Self-hosted COLMAP server unreachable: ${colmapErr?.message || 'Connection failed'}. Falling back to browser engine.`
+          `Self-hosted COLMAP server unreachable: ${colmapMsg}. Falling back to browser engine.`,
         );
         setReconstructionStage({
-          stage: 'validating',
+          stage: "validating",
           progress: 10,
-          message: 'COLMAP server unreachable. Falling back to browser engine…',
+          message: "COLMAP server unreachable. Falling back to browser engine…",
         });
       }
     }
@@ -619,17 +639,20 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         (info) => {
           setReconstructionStage(info);
         },
-        retryStrategy
+        retryStrategy,
       );
 
       setReconstructionResult(result);
-      setCurrentScreen('result');
-    } catch (err: any) {
-      console.error('Reconstruction error:', err);
-      const msg = err?.message || 'Reconstruction failed. Please review your views and try again.';
+      setCurrentScreen("result");
+    } catch (err: unknown) {
+      console.error("Reconstruction error:", err);
+      const msg =
+        err instanceof Error
+          ? err.message
+          : "Reconstruction failed. Please review your views and try again.";
       toast.error(msg);
       setReconstructionStage({
-        stage: 'failed',
+        stage: "failed",
         progress: 0,
         message: msg,
       });
@@ -644,15 +667,15 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         project = newProject(`${OBJECT_PRESETS[selectedCategory].name} Scan`);
       }
 
-      const realDataUrl = glbDataUrl.startsWith('data:')
+      const realDataUrl = glbDataUrl.startsWith("data:")
         ? glbDataUrl
         : await blobToDataUrl(glbBlob);
 
-      if (glbDataUrl.startsWith('blob:')) {
+      if (glbDataUrl.startsWith("blob:")) {
         URL.revokeObjectURL(glbDataUrl);
       }
 
-      const modelObject = newObject('model');
+      const modelObject = newObject("model");
       modelObject.name = `${OBJECT_PRESETS[selectedCategory].name} Model`;
       modelObject.model = realDataUrl;
       modelObject.position = [0, 0.5, 0];
@@ -665,12 +688,13 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
       await saveProject(updatedProject);
       navigate({
-        to: '/editor/$projectId',
+        to: "/editor/$projectId",
         params: { projectId: updatedProject.id },
       });
-    } catch (err: any) {
-      console.error('Failed to import model into Addis AR editor:', err);
-      toast.error('Failed to import model into Addis AR editor: ' + (err?.message || 'Unknown error'));
+    } catch (err: unknown) {
+      console.error("Failed to import model into Addis AR editor:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      toast.error("Failed to import model into Addis AR editor: " + message);
     }
   };
 
@@ -679,18 +703,18 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     try {
       let project = targetProject;
       if (!project) {
-        project = newProject('Scanned AR Experience');
+        project = newProject("Scanned AR Experience");
       }
 
-      const realDataUrl = glbDataUrl.startsWith('data:')
+      const realDataUrl = glbDataUrl.startsWith("data:")
         ? glbDataUrl
         : await blobToDataUrl(glbBlob);
 
-      if (glbDataUrl.startsWith('blob:')) {
+      if (glbDataUrl.startsWith("blob:")) {
         URL.revokeObjectURL(glbDataUrl);
       }
 
-      const modelObject = newObject('model');
+      const modelObject = newObject("model");
       modelObject.name = `${OBJECT_PRESETS[selectedCategory].name} AR Object`;
       modelObject.model = realDataUrl;
       modelObject.position = [0, 0, -1.2];
@@ -702,17 +726,18 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       };
 
       await saveProject(updatedProject);
-      navigate({ to: '/ar' });
-    } catch (err: any) {
-      console.error('Failed to open in AR:', err);
-      toast.error('Failed to open in AR: ' + (err?.message || 'Unknown error'));
+      navigate({ to: "/ar" });
+    } catch (err: unknown) {
+      console.error("Failed to open in AR:", err);
+      const message = err instanceof Error ? err.message : "Unknown error";
+      toast.error("Failed to open in AR: " + message);
     }
   };
 
   // ==========================================
   // SCREEN 4: FINAL 3D RESULT SCREEN
   // ==========================================
-  if (currentScreen === 'result' && reconstructionResult) {
+  if (currentScreen === "result" && reconstructionResult) {
     return (
       <div className="flex flex-col min-h-screen bg-background text-foreground p-3 sm:p-5 select-none">
         {/* Navigation Bar */}
@@ -721,7 +746,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <Button
               variant="ghost"
               size="icon"
-              onClick={() => setCurrentScreen('camera')}
+              onClick={() => setCurrentScreen("camera")}
               title="Return to Camera"
             >
               <ArrowLeft className="w-5 h-5" />
@@ -753,7 +778,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               onClick={() => {
                 setReconstructionResult(null);
                 setPhotos([]);
-                setCurrentScreen('intro');
+                setCurrentScreen("intro");
               }}
               className="text-xs gap-1.5"
             >
@@ -773,7 +798,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             onOpenInAR={handleOpenInAR}
             onRescan={() => {
               setReconstructionResult(null);
-              setCurrentScreen('camera');
+              setCurrentScreen("camera");
               void startCamera();
             }}
             onViewQualityReport={() => setShowQualityReport(true)}
@@ -801,8 +826,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   // ==========================================
   // SCREEN 3: DEDICATED PROCESSING SCREEN
   // ==========================================
-  if (currentScreen === 'processing') {
-    const isFailed = reconstructionStage.stage === 'failed';
+  if (currentScreen === "processing") {
+    const isFailed = reconstructionStage.stage === "failed";
 
     return (
       <div className="flex flex-col min-h-screen bg-neutral-950 text-foreground items-center justify-center p-4 sm:p-6 select-none">
@@ -817,12 +842,12 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               )}
             </div>
             <h1 className="text-lg sm:text-xl font-bold text-foreground">
-              {isFailed ? 'Reconstruction Failed' : 'Reconstructing 3D Model'}
+              {isFailed ? "Reconstruction Failed" : "Reconstructing 3D Model"}
             </h1>
             <p className="text-xs text-muted-foreground max-w-sm mx-auto">
               {isFailed
                 ? reconstructionStage.message
-                : reconstructionStage.message || 'Processing multi-view photographic dataset…'}
+                : reconstructionStage.message || "Processing multi-view photographic dataset…"}
             </p>
           </div>
 
@@ -846,7 +871,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
           <div className="space-y-1.5 bg-background/50 p-3 rounded-2xl border border-border/40 text-xs">
             {PROCESSING_STAGES.map((s, idx) => {
               const currentIdx = PROCESSING_STAGES.findIndex(
-                (item) => item.id === reconstructionStage.stage
+                (item) => item.id === reconstructionStage.stage,
               );
               const isPast = !isFailed && currentIdx > idx;
               const isCurrent = !isFailed && currentIdx === idx;
@@ -856,10 +881,10 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                   key={s.id}
                   className={`flex items-center justify-between py-1 px-2 rounded-lg transition-all ${
                     isCurrent
-                      ? 'bg-primary/15 text-primary font-semibold'
+                      ? "bg-primary/15 text-primary font-semibold"
                       : isPast
-                        ? 'text-foreground/80'
-                        : 'text-muted-foreground/50'
+                        ? "text-foreground/80"
+                        : "text-muted-foreground/50"
                   }`}
                 >
                   <span className="text-[11px] truncate">{s.label}</span>
@@ -880,7 +905,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <div className="space-y-2 pt-2">
               <Button
                 className="w-full gap-2 font-semibold bg-primary text-primary-foreground"
-                onClick={() => void finishScanAndReconstruct('conservative-carving')}
+                onClick={() => void finishScanAndReconstruct("conservative-carving")}
               >
                 <RefreshCw className="w-4 h-4" />
                 <span>Retry with Conservative Carving</span>
@@ -888,7 +913,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               <Button
                 variant="outline"
                 className="w-full gap-2 font-semibold text-xs"
-                onClick={() => void finishScanAndReconstruct('filter-blurry')}
+                onClick={() => void finishScanAndReconstruct("filter-blurry")}
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Filter Blurry Images & Retry</span>
@@ -897,7 +922,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                 variant="ghost"
                 className="w-full text-xs text-muted-foreground"
                 onClick={() => {
-                  setCurrentScreen('camera');
+                  setCurrentScreen("camera");
                   void startCamera();
                 }}
               >
@@ -917,7 +942,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
   // ==========================================
   // SCREEN 2: FULL-SCREEN IMMERSIVE LIVE CAMERA
   // ==========================================
-  if (currentScreen === 'camera') {
+  if (currentScreen === "camera") {
     return (
       <div className="fixed inset-0 z-40 bg-black flex flex-col select-none overflow-hidden touch-none">
         {/* Full-Bleed Live Camera Viewfinder */}
@@ -937,15 +962,15 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                 transform: `scale(${reticleScale})`,
               }}
               className={`relative transition-transform duration-150 ${
-                reticleShape === 'circle'
-                  ? 'w-64 h-64 rounded-full border-2'
-                  : reticleShape === 'oval'
-                    ? 'w-72 h-52 rounded-[100px] border-2'
-                    : 'w-64 h-64 sm:w-72 sm:h-72 rounded-3xl border-2'
+                reticleShape === "circle"
+                  ? "w-64 h-64 rounded-full border-2"
+                  : reticleShape === "oval"
+                    ? "w-72 h-52 rounded-[100px] border-2"
+                    : "w-64 h-64 sm:w-72 sm:h-72 rounded-3xl border-2"
               } ${
                 isRecording
-                  ? 'border-red-500/80 shadow-[0_0_35px_rgba(239,68,68,0.35)] animate-pulse'
-                  : 'border-primary/70 shadow-[0_0_20px_rgba(168,85,247,0.2)]'
+                  ? "border-red-500/80 shadow-[0_0_35px_rgba(239,68,68,0.35)] animate-pulse"
+                  : "border-primary/70 shadow-[0_0_20px_rgba(168,85,247,0.2)]"
               }`}
             >
               {/* Corner brackets */}
@@ -972,11 +997,11 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
           <div className="absolute top-18 left-4 right-4 flex justify-center pointer-events-none z-10">
             <div
               className={`px-4 py-2 rounded-2xl text-xs font-semibold flex items-center gap-2 backdrop-blur-xl shadow-2xl transition-all max-w-sm text-center ${
-                lastFeedbackToast?.type === 'warning'
-                  ? 'bg-amber-500/90 text-amber-950 border border-amber-400'
-                  : lastFeedbackToast?.type === 'success'
-                    ? 'bg-emerald-600/90 text-white border border-emerald-400'
-                    : 'bg-black/75 text-white border border-white/15'
+                lastFeedbackToast?.type === "warning"
+                  ? "bg-amber-500/90 text-amber-950 border border-amber-400"
+                  : lastFeedbackToast?.type === "success"
+                    ? "bg-emerald-600/90 text-white border border-emerald-400"
+                    : "bg-black/75 text-white border border-white/15"
               }`}
             >
               <Sparkles className="w-4 h-4 shrink-0 text-amber-300" />
@@ -989,8 +1014,17 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <SectorCoverageRadar
               photos={photos}
               currentAzimuth={recordingGuidance.currentAzimuth}
-              rejectedCount={Math.max(0, recordingGuidance.capturedFramesCount - recordingGuidance.keyframeCount)}
-              trackingStatus={recordingGuidance.status === 'optimal' ? 'optimal' : recordingGuidance.status === 'too-fast' ? 'limited' : 'optimal'}
+              rejectedCount={Math.max(
+                0,
+                recordingGuidance.capturedFramesCount - recordingGuidance.keyframeCount,
+              )}
+              trackingStatus={
+                recordingGuidance.status === "optimal"
+                  ? "optimal"
+                  : recordingGuidance.status === "too-fast"
+                    ? "limited"
+                    : "optimal"
+              }
               currentPass={recordingGuidance.coveragePercent > 75 ? 2 : 1}
               mode="floating"
             />
@@ -1001,10 +1035,11 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <div className="absolute inset-0 bg-black/80 backdrop-blur-md flex flex-col items-center justify-center p-6 text-center z-30">
               <RefreshCw className="w-9 h-9 text-primary animate-spin mb-3" />
               <div className="text-sm font-semibold text-white">
-                {frameProcessingMessage || 'Extracting optimal keyframes…'}
+                {frameProcessingMessage || "Extracting optimal keyframes…"}
               </div>
               <p className="text-xs text-white/60 mt-1 max-w-xs">
-                Filtering motion blur, evaluating viewpoint disparity, and generating foreground masks…
+                Filtering motion blur, evaluating viewpoint disparity, and generating foreground
+                masks…
               </p>
             </div>
           )}
@@ -1036,14 +1071,14 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             className="h-9 w-9 rounded-full bg-black/60 backdrop-blur-md border border-white/10 text-white hover:bg-black/80"
             onClick={() => {
               if (isRecording) {
-                if (confirm('Stop recording and return to setup?')) {
+                if (confirm("Stop recording and return to setup?")) {
                   void stopContinuousScan();
                   stopCameraStream();
-                  setCurrentScreen('intro');
+                  setCurrentScreen("intro");
                 }
               } else {
                 stopCameraStream();
-                setCurrentScreen('intro');
+                setCurrentScreen("intro");
               }
             }}
           >
@@ -1056,8 +1091,13 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               <>
                 <span className="w-2.5 h-2.5 rounded-full bg-red-500 animate-ping" />
                 <span className="font-mono text-red-400 font-bold">
-                  {Math.floor(recordingGuidance.durationSeconds / 60).toString().padStart(2, '0')}:
-                  {Math.floor(recordingGuidance.durationSeconds % 60).toString().padStart(2, '0')}
+                  {Math.floor(recordingGuidance.durationSeconds / 60)
+                    .toString()
+                    .padStart(2, "0")}
+                  :
+                  {Math.floor(recordingGuidance.durationSeconds % 60)
+                    .toString()
+                    .padStart(2, "0")}
                 </span>
                 <span className="text-white/30">|</span>
                 <span>{photos.length + recordingGuidance.keyframeCount} views</span>
@@ -1085,7 +1125,11 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                 onClick={toggleTorch}
                 title="Toggle Torch"
               >
-                {torchOn ? <Zap className="w-4 h-4 text-amber-400 fill-amber-400" /> : <ZapOff className="w-4 h-4 text-white/70" />}
+                {torchOn ? (
+                  <Zap className="w-4 h-4 text-amber-400 fill-amber-400" />
+                ) : (
+                  <ZapOff className="w-4 h-4 text-white/70" />
+                )}
               </Button>
             )}
 
@@ -1116,7 +1160,12 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
           <div className="absolute top-16 left-3 right-3 sm:left-auto sm:right-4 sm:w-72 bg-black/85 backdrop-blur-xl border border-white/15 rounded-2xl p-4 text-white z-30 shadow-2xl space-y-3">
             <div className="flex items-center justify-between text-xs font-semibold">
               <span>Scanning Guide Settings</span>
-              <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setShowReticleSettings(false)}>
+              <Button
+                size="icon"
+                variant="ghost"
+                className="h-6 w-6"
+                onClick={() => setShowReticleSettings(false)}
+              >
                 <X className="w-3.5 h-3.5" />
               </Button>
             </div>
@@ -1125,11 +1174,11 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             <div className="space-y-1">
               <label className="text-[10px] text-white/70 uppercase">Guide Shape</label>
               <div className="grid grid-cols-3 gap-1">
-                {(['box', 'circle', 'oval'] as const).map((shape) => (
+                {(["box", "circle", "oval"] as const).map((shape) => (
                   <Button
                     key={shape}
                     size="sm"
-                    variant={reticleShape === shape ? 'secondary' : 'ghost'}
+                    variant={reticleShape === shape ? "secondary" : "ghost"}
                     className="h-7 text-xs capitalize"
                     onClick={() => setReticleShape(shape)}
                   >
@@ -1213,8 +1262,12 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                   className="h-12 px-5 rounded-full bg-black/60 backdrop-blur-md border border-white/20 text-white hover:bg-black/80 font-semibold text-xs gap-2"
                   onClick={isPaused ? resumeContinuousScan : pauseContinuousScan}
                 >
-                  {isPaused ? <Play className="w-4 h-4 text-emerald-400" /> : <Pause className="w-4 h-4 text-amber-400" />}
-                  <span>{isPaused ? 'Resume' : 'Pause'}</span>
+                  {isPaused ? (
+                    <Play className="w-4 h-4 text-emerald-400" />
+                  ) : (
+                    <Pause className="w-4 h-4 text-amber-400" />
+                  )}
+                  <span>{isPaused ? "Resume" : "Pause"}</span>
                 </Button>
 
                 {/* Big Finish Scan Button */}
@@ -1245,8 +1298,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
           {/* Instructions note */}
           <div className="text-[11px] text-white/70 text-center font-medium">
             {isRecording
-              ? 'Move slowly in a 360° circle around your object. Keep it centered.'
-              : 'Tap the center button to begin recording. Orbit around your object smoothly.'}
+              ? "Move slowly in a 360° circle around your object. Keep it centered."
+              : "Tap the center button to begin recording. Orbit around your object smoothly."}
           </div>
         </div>
       </div>
@@ -1266,7 +1319,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               <ArrowLeft className="w-5 h-5" />
             </Button>
           ) : (
-            <Button variant="ghost" size="icon" onClick={() => navigate({ to: '/' })}>
+            <Button variant="ghost" size="icon" onClick={() => navigate({ to: "/" })}>
               <ArrowLeft className="w-5 h-5" />
             </Button>
           )}
@@ -1276,9 +1329,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               <Camera className="w-5 h-5 text-primary" />
               Scan a 3D Object
             </h1>
-            <p className="text-xs text-muted-foreground">
-              Capture your object from every angle.
-            </p>
+            <p className="text-xs text-muted-foreground">Capture your object from every angle.</p>
           </div>
         </div>
 
@@ -1313,7 +1364,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             Select Object Type for Tailored Guidance
           </h2>
           <p className="text-xs text-muted-foreground">
-            Addis AR automatically adapts photogrammetry feature thresholds and orbit recommendations based on object material.
+            Addis AR automatically adapts photogrammetry feature thresholds and orbit
+            recommendations based on object material.
           </p>
         </div>
 
@@ -1330,14 +1382,16 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                 onClick={() => setSelectedCategory(catKey)}
                 className={`p-4 rounded-2xl border text-left transition-all flex flex-col justify-between space-y-3 ${
                   isSelected
-                    ? 'border-primary bg-primary/10 shadow-lg shadow-primary/10 ring-1 ring-primary'
-                    : 'border-border/60 bg-muted/20 hover:bg-muted/40 hover:border-border'
+                    ? "border-primary bg-primary/10 shadow-lg shadow-primary/10 ring-1 ring-primary"
+                    : "border-border/60 bg-muted/20 hover:bg-muted/40 hover:border-border"
                 }`}
               >
                 <div className="flex items-center justify-between w-full">
                   <div
                     className={`p-2 rounded-xl ${
-                      isSelected ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground'
+                      isSelected
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-muted text-muted-foreground"
                     }`}
                   >
                     <Icon className="w-4 h-4" />
@@ -1377,7 +1431,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
           <div className="text-xs text-muted-foreground">
             <div className="font-semibold text-foreground">Camera Permission</div>
             <p className="text-[11px]">
-              Tapping Start Recording requests rear-camera access to display the full-screen viewfinder.
+              Tapping Start Recording requests rear-camera access to display the full-screen
+              viewfinder.
             </p>
           </div>
 
@@ -1407,7 +1462,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               disabled={cameraInitializing}
             >
               <Camera className="w-5 h-5" />
-              <span>{cameraInitializing ? 'Initializing Camera…' : 'Start Recording'}</span>
+              <span>{cameraInitializing ? "Initializing Camera…" : "Start Recording"}</span>
             </Button>
           </div>
         </div>
@@ -1455,7 +1510,8 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
             </div>
 
             <p className="text-xs text-muted-foreground">
-              Select your photogrammetry reconstruction engine. Use the built-in browser engine or connect to a self-hosted COLMAP backend.
+              Select your photogrammetry reconstruction engine. Use the built-in browser engine or
+              connect to a self-hosted COLMAP backend.
             </p>
 
             {/* Engine Selection */}
@@ -1466,36 +1522,42 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
               <div className="grid grid-cols-2 gap-2">
                 <button
                   type="button"
-                  onClick={() => setReconstructionEngine('browser')}
+                  onClick={() => setReconstructionEngine("browser")}
                   className={`p-3 rounded-xl border text-left transition-all ${
-                    reconstructionEngine === 'browser'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-muted/20 text-muted-foreground hover:border-border/80'
+                    reconstructionEngine === "browser"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
                   }`}
                 >
                   <div className="font-semibold text-xs text-foreground">Browser (Local)</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">Offline, WebGL/WASM</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    Offline, WebGL/WASM
+                  </div>
                 </button>
 
                 <button
                   type="button"
-                  onClick={() => setReconstructionEngine('colmap')}
+                  onClick={() => setReconstructionEngine("colmap")}
                   className={`p-3 rounded-xl border text-left transition-all ${
-                    reconstructionEngine === 'colmap'
-                      ? 'border-primary bg-primary/10 text-primary'
-                      : 'border-border bg-muted/20 text-muted-foreground hover:border-border/80'
+                    reconstructionEngine === "colmap"
+                      ? "border-primary bg-primary/10 text-primary"
+                      : "border-border bg-muted/20 text-muted-foreground hover:border-border/80"
                   }`}
                 >
                   <div className="font-semibold text-xs text-foreground">Self-hosted COLMAP</div>
-                  <div className="text-[10px] text-muted-foreground mt-0.5">Dense SfM + OpenMVS</div>
+                  <div className="text-[10px] text-muted-foreground mt-0.5">
+                    Dense SfM + OpenMVS
+                  </div>
                 </button>
               </div>
             </div>
 
             {/* Server URL Input for COLMAP */}
-            {reconstructionEngine === 'colmap' ? (
+            {reconstructionEngine === "colmap" ? (
               <div className="space-y-2 p-3.5 rounded-xl border border-border/80 bg-muted/30">
-                <label className="text-xs font-medium text-foreground block">COLMAP Server URL</label>
+                <label className="text-xs font-medium text-foreground block">
+                  COLMAP Server URL
+                </label>
                 <div className="flex gap-2">
                   <input
                     type="text"
@@ -1518,36 +1580,45 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
                       const res = await checkColmapServerHealth(serverUrl);
                       setIsTestingServer(false);
                       if (res.ok) {
-                        setServerTestStatus('Connected! Engine: ' + (res.engine || 'Online'));
-                        toast.success('Connected to COLMAP server!');
+                        setServerTestStatus("Connected! Engine: " + (res.engine || "Online"));
+                        toast.success("Connected to COLMAP server!");
                       } else {
-                        setServerTestStatus('Unreachable: ' + (res.message || 'Connection failed'));
-                        toast.error('COLMAP server unreachable: ' + (res.message || 'Connection failed'));
+                        setServerTestStatus("Unreachable: " + (res.message || "Connection failed"));
+                        toast.error(
+                          "COLMAP server unreachable: " + (res.message || "Connection failed"),
+                        );
                       }
                     }}
                     className="text-xs shrink-0"
                   >
-                    {isTestingServer ? 'Testing…' : 'Test'}
+                    {isTestingServer ? "Testing…" : "Test"}
                   </Button>
                 </div>
                 {serverTestStatus && (
                   <p
                     className={`text-[11px] ${
-                      serverTestStatus.startsWith('Connected') ? 'text-emerald-400' : 'text-rose-400'
+                      serverTestStatus.startsWith("Connected")
+                        ? "text-emerald-400"
+                        : "text-rose-400"
                     }`}
                   >
                     {serverTestStatus}
                   </p>
                 )}
                 <p className="text-[10px] text-muted-foreground leading-relaxed">
-                  Start the server with <code className="text-primary">python server/photogrammetry_server.py</code> on your workstation or GPU rig.
+                  Start the server with{" "}
+                  <code className="text-primary">python server/photogrammetry_server.py</code> on
+                  your workstation or GPU rig.
                 </p>
               </div>
             ) : (
               <div className="p-3 rounded-xl border border-primary/30 bg-primary/5 text-xs space-y-1">
-                <div className="font-semibold text-foreground">In-Browser Photogrammetry Active</div>
+                <div className="font-semibold text-foreground">
+                  In-Browser Photogrammetry Active
+                </div>
                 <div className="text-muted-foreground text-[11px] leading-relaxed">
-                  Reconstruction executes client-side using RANSAC epipolar tracking, volumetric space carving, and Marching Cubes.
+                  Reconstruction executes client-side using RANSAC epipolar tracking, volumetric
+                  space carving, and Marching Cubes.
                 </div>
               </div>
             )}

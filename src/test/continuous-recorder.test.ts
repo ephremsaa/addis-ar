@@ -1,25 +1,25 @@
-import { describe, it, expect, vi } from 'vitest';
-import * as THREE from 'three';
+import { describe, it, expect, vi } from "vitest";
+import * as THREE from "three";
 import {
   ContinuousScanRecorder,
   processRecordedFramesToPhotos,
   exportScanDataset,
   importScanDataset,
-} from '../lib/scanner/continuous-recorder';
+} from "../lib/scanner/continuous-recorder";
 import {
   validateAndCalibrateDepth,
   fuseDepthObservations,
   isWebXRDepthSupported,
-} from '../lib/scanner/depth-processor';
-import type { EstimatedCameraPose } from '../lib/scanner/pose-estimator';
+} from "../lib/scanner/depth-processor";
+import type { ScanPhoto } from "../lib/scanner/types";
 
-describe('ContinuousScanRecorder and Frame Selection', () => {
-  it('detects WebXR depth capability gracefully', () => {
+describe("ContinuousScanRecorder and Frame Selection", () => {
+  it("detects WebXR depth capability gracefully", () => {
     const supported = isWebXRDepthSupported();
-    expect(typeof supported).toBe('boolean');
+    expect(typeof supported).toBe("boolean");
   });
 
-  it('filters and calibrates depth measurements within valid object bounds', () => {
+  it("filters and calibrates depth measurements within valid object bounds", () => {
     const width = 10;
     const height = 10;
     const rawDepths = new Float32Array(width * height);
@@ -35,7 +35,7 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
       }
     }
 
-    const calibrated = validateAndCalibrateDepth(rawDepths, width, height, 1.0, 0.15, 1.20);
+    const calibrated = validateAndCalibrateDepth(rawDepths, width, height, 1.0, 0.15, 1.2);
     expect(calibrated).not.toBeNull();
     if (calibrated) {
       expect(calibrated.width).toBe(width);
@@ -48,7 +48,7 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
     }
   });
 
-  it('rejects completely noisy or empty depth maps (<5% valid)', () => {
+  it("rejects completely noisy or empty depth maps (<5% valid)", () => {
     const width = 10;
     const height = 10;
     const rawDepths = new Float32Array(width * height); // all 0
@@ -57,7 +57,7 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
     expect(calibrated).toBeNull();
   });
 
-  it('fuses depth observations into a structured 3D point cloud', () => {
+  it("fuses depth observations into a structured 3D point cloud", () => {
     const width = 4;
     const height = 4;
     const depthBuffer = new Float32Array(width * height).fill(0.5); // 0.5m
@@ -67,16 +67,13 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
       height,
       depthBuffer,
       minValidDepth: 0.15,
-      maxValidDepth: 1.20,
+      maxValidDepth: 1.2,
       timestamp: Date.now(),
     };
 
-    const pose: EstimatedCameraPose = {
-      id: 'cam-0',
-      matrix: new THREE.Matrix4().identity(),
-      quaternion: new THREE.Quaternion(),
+    const pose = {
       position: new THREE.Vector3(0, 0, 0.5),
-      confidence: 0.9,
+      matrix: new THREE.Matrix4().identity(),
     };
 
     const pointCloud = fuseDepthObservations([{ depth: observation, pose }]);
@@ -88,8 +85,8 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
     }
   });
 
-  it('calculates 360-degree orbit guidance correctly as camera moves around object', () => {
-    const recorder = new ContinuousScanRecorder({
+  it("calculates 360-degree orbit guidance correctly as camera moves around object", () => {
+    const recorder = new ContinuousScanRecorder(null, {
       minMotionDiffPercent: 4.0,
     });
 
@@ -98,12 +95,9 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
     for (let i = 0; i < angles.length; i++) {
       const theta = angles[i]!;
       const pos = new THREE.Vector3(Math.cos(theta) * 0.5, 0, Math.sin(theta) * 0.5);
-      const pose: EstimatedCameraPose = {
-        id: `frame-${i}`,
-        matrix: new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z),
-        quaternion: new THREE.Quaternion(),
+      const pose = {
         position: pos,
-        confidence: 0.9,
+        matrix: new THREE.Matrix4().makeTranslation(pos.x, pos.y, pos.z),
       };
 
       recorder.updateCoverage(pose);
@@ -114,46 +108,46 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
     expect(coverage.percentage).toBeGreaterThan(25);
   });
 
-  it('exports and imports ARCore scan datasets with frame timestamps and telemetry', async () => {
+  it("exports and imports ARCore scan datasets with frame timestamps and telemetry", async () => {
     // Generate dummy 1x1 base64 png
     const dummyImage =
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==';
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==";
 
     const testPhotos = [
       {
-        id: 'photo-1',
+        id: "photo-1",
         dataUrl: dummyImage,
         thumbnailUrl: dummyImage,
         timestamp: 1690000000,
         qualityScore: 88,
         blurScore: 120,
-        coverageCategory: 'side' as const,
-        suggestedNextAngle: 'left',
+        coverageCategory: "side" as const,
+        suggestedNextAngle: "left",
       },
       {
-        id: 'photo-2',
+        id: "photo-2",
         dataUrl: dummyImage,
         thumbnailUrl: dummyImage,
         timestamp: 1690000002,
         qualityScore: 92,
         blurScore: 140,
-        coverageCategory: 'top' as const,
-        suggestedNextAngle: 'right',
+        coverageCategory: "top" as const,
+        suggestedNextAngle: "right",
       },
       {
-        id: 'photo-3',
+        id: "photo-3",
         dataUrl: dummyImage,
         thumbnailUrl: dummyImage,
         timestamp: 1690000004,
         qualityScore: 95,
         blurScore: 160,
-        coverageCategory: 'side' as const,
-        suggestedNextAngle: 'up',
+        coverageCategory: "side" as const,
+        suggestedNextAngle: "up",
       },
     ];
 
-    const blob = exportScanDataset(testPhotos as any, {
-      objectName: 'Test Scanned Object',
+    const blob = exportScanDataset(testPhotos as unknown as ScanPhoto[], {
+      objectName: "Test Scanned Object",
       captureDurationSec: 15.5,
     });
 
@@ -164,16 +158,16 @@ describe('ContinuousScanRecorder and Frame Selection', () => {
       reader.onerror = reject;
       reader.readAsText(blob);
     });
-    expect(typeof jsonString).toBe('string');
+    expect(typeof jsonString).toBe("string");
     const parsed = JSON.parse(jsonString);
-    expect(parsed.format).toContain('AddisAR-ScanDataset');
+    expect(parsed.format).toContain("AddisAR-ScanDataset");
     expect(parsed.frames.length).toBe(3);
-    expect(parsed.metadata.objectName).toBe('Test Scanned Object');
+    expect(parsed.metadata.objectName).toBe("Test Scanned Object");
 
     const importedPhotos = await importScanDataset(blob);
     expect(importedPhotos.length).toBe(3);
-    expect(importedPhotos[0]?.id).toBe('photo-1');
-    expect(importedPhotos[1]?.id).toBe('photo-2');
-    expect(importedPhotos[2]?.id).toBe('photo-3');
+    expect(importedPhotos[0]?.id).toBe("photo-1");
+    expect(importedPhotos[1]?.id).toBe("photo-2");
+    expect(importedPhotos[2]?.id).toBe("photo-3");
   });
 });

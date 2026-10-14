@@ -1,18 +1,18 @@
-import { describe, it, expect, vi, beforeAll } from 'vitest';
-import * as THREE from 'three';
-import { validateImageQuality } from '@/lib/scanner/image-validator';
-import { segmentForeground, applyBrushEdit } from '@/lib/scanner/background-segmenter';
-import { marchCubes, type VoxelGrid } from '@/lib/scanner/marching-cubes';
-import { optimizeMesh } from '@/lib/scanner/mesh-optimizer';
-import { SCAN_STEPS, type ScanPhoto } from '@/lib/scanner/types';
-import { extractKeypoints, ransacEpipolarFilter } from '@/lib/scanner/pose-estimator';
-import { generateQualityReport } from '@/lib/scanner/quality-report';
-import { checkColmapServerHealth } from '@/lib/scanner/colmap-client';
+import { describe, it, expect, vi, beforeAll } from "vitest";
+import * as THREE from "three";
+import { validateImageQuality } from "@/lib/scanner/image-validator";
+import { segmentForeground, applyBrushEdit } from "@/lib/scanner/background-segmenter";
+import { marchCubes, type VoxelGrid } from "@/lib/scanner/marching-cubes";
+import { optimizeMesh } from "@/lib/scanner/mesh-optimizer";
+import { SCAN_STEPS, type ScanPhoto } from "@/lib/scanner/types";
+import { extractKeypoints, ransacEpipolarFilter } from "@/lib/scanner/pose-estimator";
+import { generateQualityReport } from "@/lib/scanner/quality-report";
+import { checkColmapServerHealth } from "@/lib/scanner/colmap-client";
 
 // Mock canvas and 2D context for jsdom environment
 beforeAll(() => {
   HTMLCanvasElement.prototype.getContext = vi.fn((contextId: string) => {
-    if (contextId === '2d') {
+    if (contextId === "2d") {
       return {
         drawImage: vi.fn(),
         getImageData: vi.fn((x, y, w, h) => ({
@@ -31,32 +31,32 @@ beforeAll(() => {
         moveTo: vi.fn(),
         lineTo: vi.fn(),
         closePath: vi.fn(),
-      } as any;
+      } as unknown as CanvasRenderingContext2D;
     }
     return null;
-  }) as any;
+  }) as unknown as typeof HTMLCanvasElement.prototype.getContext;
 
-  HTMLCanvasElement.prototype.toDataURL = vi.fn(() => 'data:image/png;base64,mock');
+  HTMLCanvasElement.prototype.toDataURL = vi.fn(() => "data:image/png;base64,mock");
 });
 
-describe('3D Object Scanner - Image Quality Validator', () => {
-  it('analyzes image brightness, sharpness, and feature richness', async () => {
-    const canvas = document.createElement('canvas');
+describe("3D Object Scanner - Image Quality Validator", () => {
+  it("analyzes image brightness, sharpness, and feature richness", async () => {
+    const canvas = document.createElement("canvas");
     canvas.width = 320;
     canvas.height = 240;
 
     const quality = await validateImageQuality(canvas);
 
     expect(quality).toBeDefined();
-    expect(typeof quality.blurScore).toBe('number');
-    expect(typeof quality.overallScore).toBe('number');
+    expect(typeof quality.blurScore).toBe("number");
+    expect(typeof quality.overallScore).toBe("number");
     expect(Array.isArray(quality.warnings)).toBe(true);
   });
 });
 
-describe('3D Object Scanner - Background Segmentation', () => {
-  it('generates maskDataUrl and transparentDataUrl', async () => {
-    const canvas = document.createElement('canvas');
+describe("3D Object Scanner - Background Segmentation", () => {
+  it("generates maskDataUrl and transparentDataUrl", async () => {
+    const canvas = document.createElement("canvas");
     canvas.width = 200;
     canvas.height = 200;
 
@@ -64,40 +64,34 @@ describe('3D Object Scanner - Background Segmentation', () => {
 
     expect(result.maskDataUrl).toBeDefined();
     expect(result.transparentDataUrl).toBeDefined();
-    expect(typeof result.foregroundRatio).toBe('number');
+    expect(typeof result.foregroundRatio).toBe("number");
   });
 
-  it('allows restoring or erasing mask regions via applyBrushEdit', async () => {
-    const origData = 'data:image/png;base64,mock';
-    const maskData = 'data:image/png;base64,mock';
+  it("allows restoring or erasing mask regions via applyBrushEdit", async () => {
+    const origData = "data:image/png;base64,mock";
+    const maskData = "data:image/png;base64,mock";
 
     // Mock Image load for jsdom
     global.Image = class {
       width = 100;
       height = 100;
-      crossOrigin = '';
-      src = '';
-      onload: any = null;
+      crossOrigin = "";
+      src = "";
+      onload: (() => void) | null = null;
       constructor() {
         setTimeout(() => this.onload && this.onload(), 5);
       }
-    } as any;
+    } as unknown as typeof Image;
 
-    const edited = await applyBrushEdit(
-      origData,
-      maskData,
-      [{ x: 50, y: 50 }],
-      'restore',
-      15
-    );
+    const edited = await applyBrushEdit(origData, maskData, [{ x: 50, y: 50 }], "restore", 15);
 
     expect(edited.maskDataUrl).toBeDefined();
     expect(edited.transparentDataUrl).toBeDefined();
   });
 });
 
-describe('3D Object Scanner - Marching Cubes & Surface Reconstruction', () => {
-  it('extracts a manifold 3D triangle mesh from a 3D spherical density field', () => {
+describe("3D Object Scanner - Marching Cubes & Surface Reconstruction", () => {
+  it("extracts a manifold 3D triangle mesh from a 3D spherical density field", () => {
     const n = 16;
     const values = new Float32Array(n * n * n);
 
@@ -129,25 +123,25 @@ describe('3D Object Scanner - Marching Cubes & Surface Reconstruction', () => {
     const geometry = marchCubes(grid, 0.0);
 
     expect(geometry).toBeInstanceOf(THREE.BufferGeometry);
-    const pos = geometry.getAttribute('position');
+    const pos = geometry.getAttribute("position");
     expect(pos).toBeDefined();
     expect(pos.count).toBeGreaterThan(0);
 
     // Verify normals and UV attributes exist
-    expect(geometry.getAttribute('normal')).toBeDefined();
-    expect(geometry.getAttribute('uv')).toBeDefined();
+    expect(geometry.getAttribute("normal")).toBeDefined();
+    expect(geometry.getAttribute("uv")).toBeDefined();
   });
 });
 
-describe('3D Object Scanner - Mesh Optimization', () => {
-  it('centers geometry and aligns origin to bottom', () => {
+describe("3D Object Scanner - Mesh Optimization", () => {
+  it("centers geometry and aligns origin to bottom", () => {
     const geo = new THREE.BoxGeometry(1, 2, 1);
     // Shift initial geometry away from origin
     geo.translate(5, 5, 5);
 
     const optimized = optimizeMesh(geo, {
       center: true,
-      origin: 'bottom',
+      origin: "bottom",
       scale: 1.0,
       rotationX: 0,
       rotationY: 0,
@@ -167,8 +161,8 @@ describe('3D Object Scanner - Mesh Optimization', () => {
   });
 });
 
-describe('3D Object Scanner - Steps & Hemisphere Configuration', () => {
-  it('defines comprehensive multi-angle steps covering 360 azimuth and elevations', () => {
+describe("3D Object Scanner - Steps & Hemisphere Configuration", () => {
+  it("defines comprehensive multi-angle steps covering 360 azimuth and elevations", () => {
     expect(SCAN_STEPS.length).toBeGreaterThanOrEqual(12);
 
     const azimuths = SCAN_STEPS.map((s) => s.azimuth);
@@ -182,18 +176,18 @@ describe('3D Object Scanner - Steps & Hemisphere Configuration', () => {
   });
 });
 
-describe('3D Object Scanner - Optical Pose Estimation & Epipolar Matching', () => {
-  it('extracts corner keypoints with 32-byte binary descriptors', () => {
-    const canvas = document.createElement('canvas');
+describe("3D Object Scanner - Optical Pose Estimation & Epipolar Matching", () => {
+  it("extracts corner keypoints with 32-byte binary descriptors", () => {
+    const canvas = document.createElement("canvas");
     canvas.width = 160;
     canvas.height = 120;
-    const ctx = canvas.getContext('2d')!;
+    const ctx = canvas.getContext("2d")!;
 
     const keypoints = extractKeypoints(ctx, 160, 120, 50);
     expect(Array.isArray(keypoints)).toBe(true);
   });
 
-  it('filters outlier feature correspondences with RANSAC epipolar geometry', () => {
+  it("filters outlier feature correspondences with RANSAC epipolar geometry", () => {
     const dummyMatches = [
       { kp1: { x: 20, y: 20 }, kp2: { x: 25, y: 22 }, distance: 5 },
       { kp1: { x: 40, y: 30 }, kp2: { x: 46, y: 31 }, distance: 6 },
@@ -207,16 +201,22 @@ describe('3D Object Scanner - Optical Pose Estimation & Epipolar Matching', () =
       { kp1: { x: 10, y: 10 }, kp2: { x: 150, y: 90 }, distance: 40 },
     ];
 
-    const result = ransacEpipolarFilter(dummyMatches as any, 160, 120, 20, 5.0);
+    const result = ransacEpipolarFilter(
+      dummyMatches as unknown as Parameters<typeof ransacEpipolarFilter>[0],
+      160,
+      120,
+      20,
+      5.0,
+    );
 
     expect(result.inliers).toBeDefined();
     expect(result.inliers.length).toBeGreaterThan(0);
-    expect(typeof result.reprojectionError).toBe('number');
+    expect(typeof result.reprojectionError).toBe("number");
   });
 });
 
-describe('3D Object Scanner - Quality Report & Auto-Retry Generation', () => {
-  it('generates a measured quality report with diagnostics and retries', () => {
+describe("3D Object Scanner - Quality Report & Auto-Retry Generation", () => {
+  it("generates a measured quality report with diagnostics and retries", () => {
     const goodReport = generateQualityReport({
       totalPhotos: 16,
       registeredCameras: 16,
@@ -233,7 +233,7 @@ describe('3D Object Scanner - Quality Report & Auto-Retry Generation', () => {
       warnings: [],
     });
 
-    expect(goodReport.status).toBe('Good');
+    expect(goodReport.status).toBe("Good");
     expect(goodReport.score).toBeGreaterThanOrEqual(80);
     expect(goodReport.metrics.exportValid).toBe(true);
 
@@ -250,18 +250,18 @@ describe('3D Object Scanner - Quality Report & Auto-Retry Generation', () => {
       disconnectedComponentsCount: 8,
       surfaceCoverageScore: 40,
       exportValid: true,
-      warnings: ['Sparse feature overlap'],
+      warnings: ["Sparse feature overlap"],
     });
 
-    expect(poorReport.status).toBe('Needs improvement');
+    expect(poorReport.status).toBe("Needs improvement");
     expect(poorReport.diagnostics.length).toBeGreaterThan(0);
     expect(poorReport.retryRecommendation?.canAutoRetry).toBe(true);
   });
 });
 
-describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
-  it('detects and eliminates needle spikes and degenerate faces while preserving genuine geometry', async () => {
-    const { cleanReconstructedMesh } = await import('@/lib/scanner/mesh-cleaner');
+describe("3D Object Scanner - Mesh Spike Artifact & Topology Cleaner", () => {
+  it("detects and eliminates needle spikes and degenerate faces while preserving genuine geometry", async () => {
+    const { cleanReconstructedMesh } = await import("@/lib/scanner/mesh-cleaner");
 
     const geom = new THREE.BufferGeometry();
     // Create 3 triangles:
@@ -270,47 +270,51 @@ describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
     // Tri 3: Needle spike triangle with extreme aspect ratio (base = 0.005, height = 2.5)
     const positions = new Float32Array([
       // Normal Triangle
-      0.0, 0.0, 0.0,
-      0.1, 0.0, 0.0,
-      0.05, 0.1, 0.0,
+      0.0, 0.0, 0.0, 0.1, 0.0, 0.0, 0.05, 0.1, 0.0,
 
       // Degenerate Triangle (zero area)
-      0.2, 0.2, 0.2,
-      0.2, 0.2, 0.2,
-      0.2, 0.2, 0.2,
+      0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2, 0.2,
 
       // Needle Spike Triangle (spanning empty space)
-      0.0, 0.0, 0.0,
-      0.002, 0.0, 0.0,
-      0.001, 2.8, 0.0,
+      0.0, 0.0, 0.0, 0.002, 0.0, 0.0, 0.001, 2.8, 0.0,
     ]);
 
-    geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+    geom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
 
     const { geometry: cleaned, report } = cleanReconstructedMesh(geom);
 
     expect(report.originalFaceCount).toBe(3);
     expect(report.degenerateFacesRemoved).toBe(1);
     expect(report.spikeTrianglesRemoved).toBeGreaterThanOrEqual(1);
-    expect(cleaned.getAttribute('position').count).toBe(3); // Only the 1 normal triangle survives
+    expect(cleaned.getAttribute("position").count).toBe(3); // Only the 1 normal triangle survives
   });
 
-  it('calibrates camera poses with mathematically correct inverted view matrices and translations', async () => {
-    const { estimateMultiViewCameraPoses } = await import('@/lib/scanner/pose-estimator');
+  it("calibrates camera poses with mathematically correct inverted view matrices and translations", async () => {
+    const { estimateMultiViewCameraPoses } = await import("@/lib/scanner/pose-estimator");
 
-    const mockPhotos: any[] = [];
+    const mockPhotos: ScanPhoto[] = [];
     for (let i = 0; i < 12; i++) {
       mockPhotos.push({
         id: `photo-${i}`,
-        dataUrl: 'data:image/png;base64,mock',
-        thumbnailUrl: 'data:image/png;base64,mock',
+        dataUrl: "data:image/png;base64,mock",
+        thumbnailUrl: "data:image/png;base64,mock",
         timestamp: Date.now(),
-        angleGroup: 'front',
+        angleGroup: "front",
         azimuth: (i / 12) * 360,
         elevation: 35,
-        maskDataUrl: 'data:image/png;base64,mock',
+        maskDataUrl: "data:image/png;base64,mock",
         isSegmented: true,
-        quality: { blurScore: 80, isBlurry: false, brightness: 120, isUnderExposed: false, isOverExposed: false, featureCount: 100, hasSufficientFeatures: true, overallScore: 85, warnings: [] },
+        quality: {
+          blurScore: 80,
+          isBlurry: false,
+          brightness: 120,
+          isUnderExposed: false,
+          isOverExposed: false,
+          featureCount: 100,
+          hasSufficientFeatures: true,
+          overallScore: 85,
+          warnings: [],
+        },
       });
     }
 
@@ -322,7 +326,8 @@ describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
       expect(pose.position.length()).toBeGreaterThan(0.3); // Has real camera distance (~0.52m)
       // Elements 12, 13, 14 of matrixWorldInverse (viewMatrix) should contain camera translation
       const viewElems = pose.viewMatrix.elements;
-      const hasTranslation = Math.abs(viewElems[12]) + Math.abs(viewElems[13]) + Math.abs(viewElems[14]) > 0.1;
+      const hasTranslation =
+        Math.abs(viewElems[12]) + Math.abs(viewElems[13]) + Math.abs(viewElems[14]) > 0.1;
       expect(hasTranslation).toBe(true);
 
       // Verify that the origin point (0, 0, 0) projects into the center of the camera view without NaN
@@ -336,33 +341,34 @@ describe('3D Object Scanner - Mesh Spike Artifact & Topology Cleaner', () => {
   });
 });
 
-describe('COLMAP Photogrammetry Backend Client', () => {
-  it('detects healthy backend server and extracts capabilities', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockResolvedValueOnce({
+describe("COLMAP Photogrammetry Backend Client", () => {
+  it("detects healthy backend server and extracts capabilities", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce({
       ok: true,
       json: async () => ({
-        status: 'healthy',
-        engine: 'COLMAP + OpenMVS / Open3D Photogrammetry',
+        status: "healthy",
+        engine: "COLMAP + OpenMVS / Open3D Photogrammetry",
         active_jobs: 0,
       }),
-    } as any);
+    } as unknown as Response);
 
-    const health = await checkColmapServerHealth('http://localhost:8000');
+    const health = await checkColmapServerHealth("http://localhost:8000");
     expect(health.ok).toBe(true);
-    expect(health.status).toBe('healthy');
-    expect(health.engine).toContain('COLMAP');
+    expect(health.status).toBe("healthy");
+    expect(health.engine).toContain("COLMAP");
 
     fetchSpy.mockRestore();
   });
 
-  it('gracefully reports unreachable server when connection fails', async () => {
-    const fetchSpy = vi.spyOn(globalThis, 'fetch').mockRejectedValueOnce(new Error('Connection refused'));
+  it("gracefully reports unreachable server when connection fails", async () => {
+    const fetchSpy = vi
+      .spyOn(globalThis, "fetch")
+      .mockRejectedValueOnce(new Error("Connection refused"));
 
-    const health = await checkColmapServerHealth('http://localhost:9999');
+    const health = await checkColmapServerHealth("http://localhost:9999");
     expect(health.ok).toBe(false);
-    expect(health.message).toContain('Connection refused');
+    expect(health.message).toContain("Connection refused");
 
     fetchSpy.mockRestore();
   });
 });
-

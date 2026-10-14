@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import type { EstimatedCameraPose, FeatureMatch } from './pose-estimator';
+import * as THREE from "three";
+import type { EstimatedCameraPose, FeatureMatch } from "./pose-estimator";
 
 export interface SparsePoint {
   position: THREE.Vector3;
@@ -25,7 +25,7 @@ export interface SparsePointCloud {
     max: [number, number, number];
   };
   positionsBuffer: Float32Array; // [x, y, z, ...]
-  colorsBuffer: Float32Array;    // [r, g, b, ...]
+  colorsBuffer: Float32Array; // [r, g, b, ...]
 }
 
 /**
@@ -37,18 +37,18 @@ export function triangulatePoint(
   cam2: EstimatedCameraPose,
   match: FeatureMatch,
   imgWidth: number,
-  imgHeight: number
+  imgHeight: number,
 ): { point: THREE.Vector3; reprojectionError: number } | null {
   // Convert 2D pixel coordinates to normalized camera coordinates [-1, 1]
   const ndc1 = new THREE.Vector3(
     (match.kp1.x / imgWidth) * 2 - 1,
     -((match.kp1.y / imgHeight) * 2 - 1),
-    0.5
+    0.5,
   );
   const ndc2 = new THREE.Vector3(
     (match.kp2.x / imgWidth) * 2 - 1,
     -((match.kp2.y / imgHeight) * 2 - 1),
-    0.5
+    0.5,
   );
 
   // Unproject to get ray directions in world space
@@ -77,7 +77,7 @@ export function triangulatePoint(
   // Parallax angle must be between ~8° and ~76° (cos between 0.24 and 0.990)
   // Rays that are nearly parallel (cos > 0.990) create massive depth uncertainty and flying outliers
   const cosAngle = Math.abs(b);
-  if (cosAngle > 0.990 || cosAngle < 0.20) {
+  if (cosAngle > 0.99 || cosAngle < 0.2) {
     return null;
   }
 
@@ -150,7 +150,7 @@ export function generateSparsePointCloud(
     matches: FeatureMatch[];
   }>,
   imgWidth: number = 320,
-  imgHeight: number = 240
+  imgHeight: number = 240,
 ): SparsePointCloud {
   const rawPoints: SparsePoint[] = [];
 
@@ -167,7 +167,7 @@ export function generateSparsePointCloud(
       const px = Math.min(imgWidth - 1, Math.max(0, Math.floor(match.kp1.x)));
       const py = Math.min(imgHeight - 1, Math.max(0, Math.floor(match.kp1.y)));
       const ctx = cam1.maskContext; // Uses image canvas
-      
+
       // Default color
       let color: [number, number, number] = [0.2, 0.2, 0.25];
       try {
@@ -274,6 +274,9 @@ function filterStatisticalOutliers(points: SparsePoint[]): SparsePoint[] {
   const stdDist = Math.sqrt(variance / points.length);
 
   // Tabletop objects (cases, electronics, shoes) cluster within median * 2.2 and <= 0.42m
-  const statisticalThreshold = Math.min(0.42, Math.max(0.18, medianDist * 2.2, meanDist + stdDist * 2.0));
+  const statisticalThreshold = Math.min(
+    0.42,
+    Math.max(0.18, medianDist * 2.2, meanDist + stdDist * 2.0),
+  );
   return points.filter((pt, i) => (distances[i] ?? Infinity) <= statisticalThreshold);
 }

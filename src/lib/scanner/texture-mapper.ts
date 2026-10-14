@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import type { EstimatedCameraPose } from './pose-estimator';
+import * as THREE from "three";
+import type { EstimatedCameraPose } from "./pose-estimator";
 
 export interface TextureMappingOptions {
   textureSize: number; // e.g. 1024 or 2048
@@ -25,24 +25,24 @@ export interface TextureMappingResult {
 export function mapMultiViewTextures(
   geometry: THREE.BufferGeometry,
   cameraPoses: EstimatedCameraPose[],
-  options: Partial<TextureMappingOptions> = {}
+  options: Partial<TextureMappingOptions> = {},
 ): TextureMappingResult {
   const textureSize = options.textureSize || 1024;
   const blendSeams = options.blendSeams !== false;
-  const bgColor = options.backgroundColor || '#201c27';
+  const bgColor = options.backgroundColor || "#201c27";
 
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = textureSize;
   canvas.height = textureSize;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true })!;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true })!;
 
   // Fill neutral studio base
   ctx.fillStyle = bgColor;
   ctx.fillRect(0, 0, textureSize, textureSize);
 
-  const posAttr = geometry.getAttribute('position');
-  const uvAttr = geometry.getAttribute('uv');
-  const normAttr = geometry.getAttribute('normal');
+  const posAttr = geometry.getAttribute("position");
+  const uvAttr = geometry.getAttribute("uv");
+  const normAttr = geometry.getAttribute("normal");
 
   if (!posAttr || !uvAttr || cameraPoses.length === 0) {
     return {
@@ -54,10 +54,10 @@ export function mapMultiViewTextures(
 
   // Pre-rasterize camera images and masks into pixel buffers for rapid sampling
   const cameraBuffers = cameraPoses.map((p) => {
-    const c = document.createElement('canvas');
+    const c = document.createElement("canvas");
     c.width = 480;
     c.height = Math.round((p.imageElement.height / p.imageElement.width) * 480);
-    const cx = c.getContext('2d', { willReadFrequently: true })!;
+    const cx = c.getContext("2d", { willReadFrequently: true })!;
     cx.drawImage(p.imageElement, 0, 0, c.width, c.height);
     const imgData = cx.getImageData(0, 0, c.width, c.height).data;
 
@@ -100,10 +100,12 @@ export function mapMultiViewTextures(
     if (normAttr) {
       faceNormal.set(normAttr.getX(i), normAttr.getY(i), normAttr.getZ(i)).normalize();
     } else {
-      faceNormal.crossVectors(
-        new THREE.Vector3().subVectors(tempP2, tempP1),
-        new THREE.Vector3().subVectors(tempP3, tempP1)
-      ).normalize();
+      faceNormal
+        .crossVectors(
+          new THREE.Vector3().subVectors(tempP2, tempP1),
+          new THREE.Vector3().subVectors(tempP3, tempP1),
+        )
+        .normalize();
     }
 
     // Rank camera views by dot product (normal · view direction)

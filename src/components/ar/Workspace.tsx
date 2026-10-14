@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { Link } from "@tanstack/react-router";
 import {
   Box,
   FolderOpen,
@@ -14,27 +14,25 @@ import {
   Menu,
   X,
   Sparkles,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { useEffect, useState, type ReactNode } from 'react';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { useEffect, useState, type ReactNode } from "react";
 
 export function Workspace({
   children,
-  page = 'My projects',
+  page = "My projects",
 }: {
   children: ReactNode;
   page?: string;
 }) {
-  const [usage, setUsage] = useState('Calculating…');
+  const [usage, setUsage] = useState("Calculating…");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   useEffect(() => {
     navigator.storage
       ?.estimate()
-      .then((s) =>
-        setUsage(`${((s.usage || 0) / 1048576).toFixed(1)} MB used locally`)
-      )
-      .catch(() => setUsage('Local browser storage'));
+      .then((s) => setUsage(`${((s.usage || 0) / 1048576).toFixed(1)} MB used locally`))
+      .catch(() => setUsage("Local browser storage"));
   }, []);
 
   return (
@@ -50,55 +48,35 @@ export function Workspace({
 
         <div className="side-label">WORKSPACE</div>
         <nav className="side-nav">
-          <Button
-            asChild
-            variant="ghost"
-            className={page === 'My projects' ? 'active' : ''}
-          >
+          <Button asChild variant="ghost" className={page === "My projects" ? "active" : ""}>
             <Link to="/">
               <FolderOpen />
               My projects
             </Link>
           </Button>
 
-          <Button
-            asChild
-            variant="ghost"
-            className={page === '3D Object Scanner' ? 'active' : ''}
-          >
+          <Button asChild variant="ghost" className={page === "3D Object Scanner" ? "active" : ""}>
             <Link to="/scanner">
               <Scan />
               3D Object Scanner
             </Link>
           </Button>
 
-          <Button
-            asChild
-            variant="ghost"
-            className={page === 'AR Camera' ? 'active' : ''}
-          >
+          <Button asChild variant="ghost" className={page === "AR Camera" ? "active" : ""}>
             <Link to="/ar">
               <Camera />
               AR Camera
             </Link>
           </Button>
 
-          <Button
-            asChild
-            variant="ghost"
-            className={page === 'Templates' ? 'active' : ''}
-          >
+          <Button asChild variant="ghost" className={page === "Templates" ? "active" : ""}>
             <Link to="/templates">
               <LayoutTemplate />
               Templates
             </Link>
           </Button>
 
-          <Button
-            asChild
-            variant="ghost"
-            className={page === 'About Addis AR' ? 'active' : ''}
-          >
+          <Button asChild variant="ghost" className={page === "About Addis AR" ? "active" : ""}>
             <Link to="/welcome">
               <Box />
               Explore Addis AR
@@ -108,11 +86,7 @@ export function Workspace({
 
         <div className="side-label">RESOURCES</div>
         <nav className="side-nav secondary-nav">
-          <Button
-            asChild
-            variant="ghost"
-            className={page === 'Documentation' ? 'active' : ''}
-          >
+          <Button asChild variant="ghost" className={page === "Documentation" ? "active" : ""}>
             <Link to="/docs">
               <BookOpen />
               Documentation
@@ -184,33 +158,27 @@ export function Workspace({
 
         {/* Mobile Bottom Navigation Bar (Docked to bottom on small screens) */}
         <nav className="mobile-bottom-nav">
-          <Link
-            to="/"
-            className={`mobile-nav-item ${page === 'My projects' ? 'active' : ''}`}
-          >
+          <Link to="/" className={`mobile-nav-item ${page === "My projects" ? "active" : ""}`}>
             <FolderOpen size={18} />
             <span>Projects</span>
           </Link>
 
           <Link
             to="/scanner"
-            className={`mobile-nav-item ${page === '3D Object Scanner' ? 'active' : ''}`}
+            className={`mobile-nav-item ${page === "3D Object Scanner" ? "active" : ""}`}
           >
             <Scan size={18} />
             <span>Scanner</span>
           </Link>
 
-          <Link
-            to="/ar"
-            className={`mobile-nav-item ${page === 'AR Camera' ? 'active' : ''}`}
-          >
+          <Link to="/ar" className={`mobile-nav-item ${page === "AR Camera" ? "active" : ""}`}>
             <Camera size={18} />
             <span>AR Camera</span>
           </Link>
 
           <Link
             to="/templates"
-            className={`mobile-nav-item ${page === 'Templates' ? 'active' : ''}`}
+            className={`mobile-nav-item ${page === "Templates" ? "active" : ""}`}
           >
             <LayoutTemplate size={18} />
             <span>Templates</span>
@@ -218,7 +186,7 @@ export function Workspace({
 
           <button
             onClick={() => setMobileMenuOpen(true)}
-            className={`mobile-nav-item ${page === 'Documentation' || page === 'About Addis AR' ? 'active' : ''}`}
+            className={`mobile-nav-item ${page === "Documentation" || page === "About Addis AR" ? "active" : ""}`}
           >
             <Box size={18} />
             <span>More</span>
@@ -228,14 +196,8 @@ export function Workspace({
 
       {/* Mobile Menu Drawer / Scrim */}
       {mobileMenuOpen && (
-        <div
-          className="dialog-scrim"
-          onClick={() => setMobileMenuOpen(false)}
-        >
-          <div
-            className="dialog-box mobile-drawer"
-            onClick={(e) => e.stopPropagation()}
-          >
+        <div className="dialog-scrim" onClick={() => setMobileMenuOpen(false)}>
+          <div className="dialog-box mobile-drawer" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-border mb-4">
               <div className="flex items-center gap-2.5">
                 <img
@@ -243,9 +205,7 @@ export function Workspace({
                   alt="Addis AR logo"
                   className="w-7 h-7 object-contain rounded"
                 />
-                <span className="font-bold text-sm text-foreground">
-                  Addis AR Studio
-                </span>
+                <span className="font-bold text-sm text-foreground">Addis AR Studio</span>
               </div>
               <Button
                 variant="ghost"
@@ -262,7 +222,7 @@ export function Workspace({
                 to="/"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary ${
-                  page === 'My projects' ? 'bg-accent text-accent-foreground font-semibold' : ''
+                  page === "My projects" ? "bg-accent text-accent-foreground font-semibold" : ""
                 }`}
               >
                 <FolderOpen size={16} />
@@ -273,7 +233,9 @@ export function Workspace({
                 to="/scanner"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary ${
-                  page === '3D Object Scanner' ? 'bg-accent text-accent-foreground font-semibold' : ''
+                  page === "3D Object Scanner"
+                    ? "bg-accent text-accent-foreground font-semibold"
+                    : ""
                 }`}
               >
                 <Scan size={16} />
@@ -284,7 +246,7 @@ export function Workspace({
                 to="/ar"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary ${
-                  page === 'AR Camera' ? 'bg-accent text-accent-foreground font-semibold' : ''
+                  page === "AR Camera" ? "bg-accent text-accent-foreground font-semibold" : ""
                 }`}
               >
                 <Camera size={16} />
@@ -295,7 +257,7 @@ export function Workspace({
                 to="/templates"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary ${
-                  page === 'Templates' ? 'bg-accent text-accent-foreground font-semibold' : ''
+                  page === "Templates" ? "bg-accent text-accent-foreground font-semibold" : ""
                 }`}
               >
                 <LayoutTemplate size={16} />
@@ -306,7 +268,7 @@ export function Workspace({
                 to="/welcome"
                 onClick={() => setMobileMenuOpen(false)}
                 className={`flex items-center gap-3 p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary ${
-                  page === 'About Addis AR' ? 'bg-accent text-accent-foreground font-semibold' : ''
+                  page === "About Addis AR" ? "bg-accent text-accent-foreground font-semibold" : ""
                 }`}
               >
                 <Sparkles size={16} />
@@ -318,7 +280,7 @@ export function Workspace({
                   to="/docs"
                   onClick={() => setMobileMenuOpen(false)}
                   className={`flex items-center gap-3 p-2.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-secondary ${
-                    page === 'Documentation' ? 'bg-accent text-accent-foreground font-semibold' : ''
+                    page === "Documentation" ? "bg-accent text-accent-foreground font-semibold" : ""
                   }`}
                 >
                   <BookOpen size={16} />

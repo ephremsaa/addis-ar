@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from "react";
 import {
   Camera,
   Video,
@@ -29,18 +29,18 @@ import {
   ChevronRight,
   Maximize2,
   Trash2,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { ARSessionManager, type ARSessionState } from '@/lib/ar/ar-session-manager';
-import { PlacementController } from '@/lib/ar/placement-controller';
-import { MarkerDetector } from '@/lib/ar/vision/marker-detector';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { ARSessionManager, type ARSessionState } from "@/lib/ar/ar-session-manager";
+import { PlacementController } from "@/lib/ar/placement-controller";
+import { MarkerDetector } from "@/lib/ar/vision/marker-detector";
 import {
   type Project,
   type SceneObject,
   type TrackingMode,
   trackingModes,
   download,
-} from '@/lib/ar/projects';
+} from "@/lib/ar/projects";
 
 interface ARWorkspaceProps {
   project: Project;
@@ -49,29 +49,27 @@ interface ARWorkspaceProps {
   onReturnToEditor: () => void;
 }
 
-type DrawerType = 'adjust' | 'objects' | 'tracking' | 'settings' | null;
+type DrawerType = "adjust" | "objects" | "tracking" | "settings" | null;
 
 export function ARWorkspace({
   project,
-  initialSelectedId = '',
+  initialSelectedId = "",
   onUpdateProject,
   onReturnToEditor,
 }: ARWorkspaceProps) {
   const [currentProject, setCurrentProject] = useState<Project>(project);
   const [selectedId, setSelectedId] = useState<string>(
-    initialSelectedId || project.objects[0]?.id || ''
+    initialSelectedId || project.objects[0]?.id || "",
   );
   const [sessionManager] = useState(() => new ARSessionManager());
-  const [sessionState, setSessionState] = useState<ARSessionState>(() =>
-    sessionManager.getState()
-  );
+  const [sessionState, setSessionState] = useState<ARSessionState>(() => sessionManager.getState());
 
   // Active drawer menu
   const [activeDrawer, setActiveDrawer] = useState<DrawerType>(null);
   const [uniformScale, setUniformScale] = useState(true);
   const [showMarkerDialog, setShowMarkerDialog] = useState(false);
   const [showInfoDialog, setShowInfoDialog] = useState(false);
-  const [feedbackMessage, setFeedbackMessage] = useState<string>('');
+  const [feedbackMessage, setFeedbackMessage] = useState<string>("");
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const viewportRef = useRef<HTMLDivElement>(null);
@@ -89,12 +87,7 @@ export function ARWorkspace({
     let mounted = true;
     if (viewportRef.current && videoRef.current) {
       sessionManager
-        .initSession(
-          viewportRef.current,
-          videoRef.current,
-          currentProject.objects,
-          selectedId
-        )
+        .initSession(viewportRef.current, videoRef.current, currentProject.objects, selectedId)
         .catch(console.error);
     }
 
@@ -103,11 +96,11 @@ export function ARWorkspace({
         sessionManager.handleResize();
       }
     };
-    window.addEventListener('resize', handleResize);
+    window.addEventListener("resize", handleResize);
 
     return () => {
       mounted = false;
-      window.removeEventListener('resize', handleResize);
+      window.removeEventListener("resize", handleResize);
       sessionManager.dispose();
     };
   }, [sessionManager]);
@@ -132,55 +125,55 @@ export function ARWorkspace({
         updated: Date.now(),
       }));
     },
-    [selectedObject]
+    [selectedObject],
   );
 
   const handleStartCamera = async () => {
     try {
       await sessionManager.startCamera();
-      setFeedbackMessage('Camera connected. Point at your target or surface.');
+      setFeedbackMessage("Camera connected. Point at your target or surface.");
     } catch (e) {
-      setFeedbackMessage(e instanceof Error ? e.message : 'Camera failed to start.');
+      setFeedbackMessage(e instanceof Error ? e.message : "Camera failed to start.");
     }
   };
 
   const handleStopCamera = () => {
     sessionManager.stopCamera();
-    setFeedbackMessage('Camera stopped.');
+    setFeedbackMessage("Camera stopped.");
   };
 
   const handleSwitchFacing = async () => {
     try {
       await sessionManager.camera.toggleFacingMode();
-      setFeedbackMessage('Switched camera.');
+      setFeedbackMessage("Switched camera.");
     } catch {
-      setFeedbackMessage('Could not switch camera.');
+      setFeedbackMessage("Could not switch camera.");
     }
   };
 
   const handleScanTarget = () => {
     const report = sessionManager.scanTarget();
     if (!report) {
-      setFeedbackMessage('Start the camera first to scan a target.');
+      setFeedbackMessage("Start the camera first to scan a target.");
       return;
     }
     setFeedbackMessage(
-      `Analyzed target: Score ${report.score}/100 (${report.quality}). ${report.message}`
+      `Analyzed target: Score ${report.score}/100 (${report.quality}). ${report.message}`,
     );
   };
 
   const handleConfirmTarget = () => {
-    const success = sessionManager.confirmTarget('Target');
+    const success = sessionManager.confirmTarget("Target");
     if (success) {
-      setFeedbackMessage('Target locked! Virtual content is now anchored to target.');
+      setFeedbackMessage("Target locked! Virtual content is now anchored to target.");
     } else {
-      setFeedbackMessage('Cannot lock: target lacks distinct visual contrast or texture.');
+      setFeedbackMessage("Cannot lock: target lacks distinct visual contrast or texture.");
     }
   };
 
   const handleUnlockTarget = () => {
     sessionManager.unlockTarget();
-    setFeedbackMessage('Target unlocked. Realign reticle and scan another target.');
+    setFeedbackMessage("Target unlocked. Realign reticle and scan another target.");
   };
 
   const handleModeChange = (mode: TrackingMode) => {
@@ -228,9 +221,9 @@ export function ARWorkspace({
   };
 
   const handleScreenshot = async () => {
-    setFeedbackMessage('Capturing AR screenshot…');
+    setFeedbackMessage("Capturing AR screenshot…");
     await sessionManager.captureScreenshot(currentProject.name);
-    setFeedbackMessage('AR screenshot saved to downloads.');
+    setFeedbackMessage("AR screenshot saved to downloads.");
   };
 
   const trackingReport = sessionState.trackingReport;
@@ -240,16 +233,10 @@ export function ARWorkspace({
     <div className="ar-workspace select-none">
       {/* 1. Full Screen Camera Viewport (Background Video + 3D Canvas) */}
       <main className="ar-viewport" ref={viewportRef}>
-        <video
-          ref={videoRef}
-          playsInline
-          muted
-          autoPlay
-          className="ar-video-feed"
-        />
+        <video ref={videoRef} playsInline muted autoPlay className="ar-video-feed" />
 
         {/* Central Aiming Reticle (when not locked) */}
-        {sessionState.cameraStatus === 'running' && !sessionState.lockedTarget && (
+        {sessionState.cameraStatus === "running" && !sessionState.lockedTarget && (
           <div className="ar-reticle-container">
             <div className="ar-reticle">
               <div className="corner top-left" />
@@ -278,25 +265,26 @@ export function ARWorkspace({
               {sessionState.lockedTarget?.label ||
                 (trackingReport.detectedMarkerId !== undefined
                   ? `Marker #${trackingReport.detectedMarkerId}`
-                  : 'Tracked Target')}
+                  : "Tracked Target")}
             </div>
           </div>
         )}
 
         {/* Insecure Context or Permission Notice */}
-        {sessionState.cameraStatus === 'insecure' && (
+        {sessionState.cameraStatus === "insecure" && (
           <div className="ar-overlay-banner">
             <ShieldAlert className="text-amber-400" size={28} />
             <div>
               <h3 className="font-semibold text-sm">Secure Context (HTTPS) Required</h3>
               <p className="text-xs text-muted-foreground mt-1">
-                Camera access requires HTTPS or localhost. Serve through an HTTPS tunnel or localhost.
+                Camera access requires HTTPS or localhost. Serve through an HTTPS tunnel or
+                localhost.
               </p>
             </div>
           </div>
         )}
 
-        {sessionState.cameraStatus === 'denied' && (
+        {sessionState.cameraStatus === "denied" && (
           <div className="ar-overlay-banner">
             <AlertCircle className="text-destructive" size={28} />
             <div>
@@ -312,16 +300,20 @@ export function ARWorkspace({
         )}
 
         {/* Idle Hero (Before Camera Starts) */}
-        {sessionState.cameraStatus === 'idle' && (
+        {sessionState.cameraStatus === "idle" && (
           <div className="ar-idle-hero">
             <div className="rounded-full bg-primary/20 p-4 border border-primary/40">
               <Camera size={38} className="text-primary" />
             </div>
             <h2 className="text-lg lg:text-xl font-bold mt-3 text-white">Full-Screen AR Camera</h2>
             <p className="text-xs text-muted-foreground max-w-sm mt-1 leading-relaxed">
-              Anchor your 3D creations onto real surfaces, posters, or markers with live spatial tracking.
+              Anchor your 3D creations onto real surfaces, posters, or markers with live spatial
+              tracking.
             </p>
-            <Button onClick={handleStartCamera} className="mt-4 gap-2 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold">
+            <Button
+              onClick={handleStartCamera}
+              className="mt-4 gap-2 px-6 bg-primary hover:bg-primary/90 text-primary-foreground font-semibold"
+            >
               <Video size={16} />
               Start AR Camera
             </Button>
@@ -334,7 +326,7 @@ export function ARWorkspace({
             <Info size={13} className="text-primary" />
             <span className="text-white">{feedbackMessage}</span>
             <button
-              onClick={() => setFeedbackMessage('')}
+              onClick={() => setFeedbackMessage("")}
               className="ml-2 text-muted-foreground hover:text-white"
             >
               ×
@@ -376,12 +368,12 @@ export function ARWorkspace({
             <span className="ar-dot" />
             <span className="text-[10px] font-bold tracking-wider uppercase font-mono">
               {sessionState.lockedTarget
-                ? 'LOCKED'
-                : trackingReport.state === 'reliable'
-                ? 'TRACKING'
-                : trackingReport.state === 'uncertain'
-                ? 'ACQUIRING'
-                : 'SEARCHING'}
+                ? "LOCKED"
+                : trackingReport.state === "reliable"
+                  ? "TRACKING"
+                  : trackingReport.state === "uncertain"
+                    ? "ACQUIRING"
+                    : "SEARCHING"}
             </span>
             <span className="text-[9px] opacity-75 font-mono">
               {Math.round(trackingReport.confidence * 100)}%
@@ -424,29 +416,23 @@ export function ARWorkspace({
       {/* 3. Slide-Up Glass Drawer / Bottom Sheet (When Active) */}
       {activeDrawer && (
         <>
-          <div
-            className="ar-drawer-backdrop"
-            onClick={() => setActiveDrawer(null)}
-          />
+          <div className="ar-drawer-backdrop" onClick={() => setActiveDrawer(null)} />
 
           <div className="ar-bottom-drawer">
-            <div
-              className="ar-drawer-handle"
-              onClick={() => setActiveDrawer(null)}
-            />
+            <div className="ar-drawer-handle" onClick={() => setActiveDrawer(null)} />
 
             {/* Drawer Header */}
             <div className="ar-drawer-header">
               <div className="flex items-center gap-2">
-                {activeDrawer === 'adjust' && <Sliders className="w-4 h-4 text-primary" />}
-                {activeDrawer === 'objects' && <Layers className="w-4 h-4 text-primary" />}
-                {activeDrawer === 'tracking' && <Crosshair className="w-4 h-4 text-primary" />}
-                {activeDrawer === 'settings' && <Settings className="w-4 h-4 text-primary" />}
+                {activeDrawer === "adjust" && <Sliders className="w-4 h-4 text-primary" />}
+                {activeDrawer === "objects" && <Layers className="w-4 h-4 text-primary" />}
+                {activeDrawer === "tracking" && <Crosshair className="w-4 h-4 text-primary" />}
+                {activeDrawer === "settings" && <Settings className="w-4 h-4 text-primary" />}
                 <span className="text-xs font-bold text-white uppercase tracking-wider">
-                  {activeDrawer === 'adjust' && 'Adjust & Transforms'}
-                  {activeDrawer === 'objects' && 'Scene Objects'}
-                  {activeDrawer === 'tracking' && 'Tracking Modes & Target'}
-                  {activeDrawer === 'settings' && 'Camera & Settings'}
+                  {activeDrawer === "adjust" && "Adjust & Transforms"}
+                  {activeDrawer === "objects" && "Scene Objects"}
+                  {activeDrawer === "tracking" && "Tracking Modes & Target"}
+                  {activeDrawer === "settings" && "Camera & Settings"}
                 </span>
               </div>
               <Button
@@ -462,7 +448,7 @@ export function ARWorkspace({
             {/* Drawer Body */}
             <div className="ar-drawer-content space-y-4">
               {/* TAB: ADJUST / TRANSFORMS */}
-              {activeDrawer === 'adjust' && (
+              {activeDrawer === "adjust" && (
                 <>
                   {selectedObject ? (
                     <div className="space-y-3.5">
@@ -531,7 +517,7 @@ export function ARWorkspace({
                           </span>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          {(['x', 'y', 'z'] as const).map((axis, i) => (
+                          {(["x", "y", "z"] as const).map((axis, i) => (
                             <div key={axis} className="space-y-1">
                               <span className="text-[10px] uppercase font-bold text-muted-foreground block text-center">
                                 {axis}
@@ -544,7 +530,7 @@ export function ARWorkspace({
                                   onClick={() =>
                                     updateSelectedObject((obj) => {
                                       const pos = [...obj.position] as [number, number, number];
-                                      pos[i] = Number((pos[i] - 0.1).toFixed(2));
+                                      pos[i] = Number(((pos[i] ?? 0) - 0.1).toFixed(2));
                                       return { ...obj, position: pos };
                                     })
                                   }
@@ -554,7 +540,7 @@ export function ARWorkspace({
                                 <input
                                   type="number"
                                   step="0.05"
-                                  value={Number(selectedObject.position[i].toFixed(2))}
+                                  value={Number((selectedObject.position[i] ?? 0).toFixed(2))}
                                   onChange={(e) => {
                                     const val = parseFloat(e.target.value) || 0;
                                     updateSelectedObject((obj) => {
@@ -572,7 +558,7 @@ export function ARWorkspace({
                                   onClick={() =>
                                     updateSelectedObject((obj) => {
                                       const pos = [...obj.position] as [number, number, number];
-                                      pos[i] = Number((pos[i] + 0.1).toFixed(2));
+                                      pos[i] = Number(((pos[i] ?? 0) + 0.1).toFixed(2));
                                       return { ...obj, position: pos };
                                     })
                                   }
@@ -593,7 +579,7 @@ export function ARWorkspace({
                           </span>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          {(['x', 'y', 'z'] as const).map((axis, i) => (
+                          {(["x", "y", "z"] as const).map((axis, i) => (
                             <div key={axis} className="space-y-1">
                               <span className="text-[10px] uppercase font-bold text-muted-foreground block text-center">
                                 {axis}
@@ -606,7 +592,7 @@ export function ARWorkspace({
                                   onClick={() =>
                                     updateSelectedObject((obj) => {
                                       const rot = [...obj.rotation] as [number, number, number];
-                                      rot[i] = (rot[i] - 15 + 360) % 360;
+                                      rot[i] = ((rot[i] ?? 0) - 15 + 360) % 360;
                                       return { ...obj, rotation: rot };
                                     })
                                   }
@@ -615,7 +601,7 @@ export function ARWorkspace({
                                 </Button>
                                 <input
                                   type="number"
-                                  value={Math.round(selectedObject.rotation[i])}
+                                  value={Math.round(selectedObject.rotation[i] ?? 0)}
                                   onChange={(e) => {
                                     const val = parseInt(e.target.value) || 0;
                                     updateSelectedObject((obj) => {
@@ -633,7 +619,7 @@ export function ARWorkspace({
                                   onClick={() =>
                                     updateSelectedObject((obj) => {
                                       const rot = [...obj.rotation] as [number, number, number];
-                                      rot[i] = (rot[i] + 15) % 360;
+                                      rot[i] = ((rot[i] ?? 0) + 15) % 360;
                                       return { ...obj, rotation: rot };
                                     })
                                   }
@@ -655,14 +641,16 @@ export function ARWorkspace({
                           <button
                             onClick={() => setUniformScale(!uniformScale)}
                             className={`text-[10px] px-2 py-0.5 rounded font-semibold transition ${
-                              uniformScale ? 'bg-primary text-primary-foreground' : 'bg-white/10 text-white'
+                              uniformScale
+                                ? "bg-primary text-primary-foreground"
+                                : "bg-white/10 text-white"
                             }`}
                           >
-                            {uniformScale ? 'Uniform Locked' : 'Independent'}
+                            {uniformScale ? "Uniform Locked" : "Independent"}
                           </button>
                         </div>
                         <div className="grid grid-cols-3 gap-2">
-                          {(['x', 'y', 'z'] as const).map((axis, i) => (
+                          {(["x", "y", "z"] as const).map((axis, i) => (
                             <div key={axis} className="space-y-1">
                               <span className="text-[10px] uppercase font-bold text-muted-foreground block text-center">
                                 {axis}
@@ -671,7 +659,7 @@ export function ARWorkspace({
                                 type="number"
                                 step="0.1"
                                 min="0.05"
-                                value={Number(selectedObject.scale[i].toFixed(2))}
+                                value={Number((selectedObject.scale[i] ?? 1).toFixed(2))}
                                 onChange={(e) => {
                                   const val = Math.max(0.05, parseFloat(e.target.value) || 0.1);
                                   updateSelectedObject((obj) => {
@@ -699,7 +687,7 @@ export function ARWorkspace({
               )}
 
               {/* TAB: SCENE OBJECTS */}
-              {activeDrawer === 'objects' && (
+              {activeDrawer === "objects" && (
                 <div className="space-y-2">
                   <div className="flex items-center justify-between text-xs text-muted-foreground mb-1">
                     <span>Scene Objects ({currentProject.objects.length})</span>
@@ -713,14 +701,16 @@ export function ARWorkspace({
                         onClick={() => setSelectedId(obj.id)}
                         className={`flex items-center justify-between p-2.5 rounded-xl border transition cursor-pointer ${
                           selectedId === obj.id
-                            ? 'bg-purple-950/60 border-purple-500/60 text-white shadow-lg'
-                            : 'bg-white/5 border-white/10 text-white/80 hover:bg-white/10'
+                            ? "bg-purple-950/60 border-purple-500/60 text-white shadow-lg"
+                            : "bg-white/5 border-white/10 text-white/80 hover:bg-white/10"
                         }`}
                       >
                         <div className="flex items-center gap-2.5">
                           <Box
                             size={16}
-                            className={selectedId === obj.id ? 'text-primary' : 'text-muted-foreground'}
+                            className={
+                              selectedId === obj.id ? "text-primary" : "text-muted-foreground"
+                            }
                           />
                           <div>
                             <div className="text-xs font-bold text-white">{obj.name}</div>
@@ -740,12 +730,16 @@ export function ARWorkspace({
                               setCurrentProject((prev) => ({
                                 ...prev,
                                 objects: prev.objects.map((o) =>
-                                  o.id === obj.id ? { ...o, visible: !o.visible } : o
+                                  o.id === obj.id ? { ...o, visible: !o.visible } : o,
                                 ),
                               }));
                             }}
                           >
-                            {obj.visible ? <Eye size={14} /> : <EyeOff size={14} className="text-white/40" />}
+                            {obj.visible ? (
+                              <Eye size={14} />
+                            ) : (
+                              <EyeOff size={14} className="text-white/40" />
+                            )}
                           </Button>
                         </div>
                       </div>
@@ -755,7 +749,7 @@ export function ARWorkspace({
               )}
 
               {/* TAB: TRACKING MODES & TARGETS */}
-              {activeDrawer === 'tracking' && (
+              {activeDrawer === "tracking" && (
                 <div className="space-y-3.5">
                   <div className="space-y-1.5">
                     <label className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase block">
@@ -764,36 +758,38 @@ export function ARWorkspace({
                     <div className="grid grid-cols-2 gap-2">
                       <Button
                         size="sm"
-                        variant={trackingReport.mode === 'focus-target' ? 'secondary' : 'outline'}
-                        onClick={() => handleModeChange('focus-target')}
-                        className={`text-xs justify-start h-9 ${trackingReport.mode === 'focus-target' ? 'border-primary' : ''}`}
+                        variant={trackingReport.mode === "focus-target" ? "secondary" : "outline"}
+                        onClick={() => handleModeChange("focus-target")}
+                        className={`text-xs justify-start h-9 ${trackingReport.mode === "focus-target" ? "border-primary" : ""}`}
                       >
                         <Crosshair size={14} className="mr-2 text-primary" />
                         Focus Target
                       </Button>
                       <Button
                         size="sm"
-                        variant={trackingReport.mode === 'marker' ? 'secondary' : 'outline'}
-                        onClick={() => handleModeChange('marker')}
-                        className={`text-xs justify-start h-9 ${trackingReport.mode === 'marker' ? 'border-primary' : ''}`}
+                        variant={trackingReport.mode === "marker" ? "secondary" : "outline"}
+                        onClick={() => handleModeChange("marker")}
+                        className={`text-xs justify-start h-9 ${trackingReport.mode === "marker" ? "border-primary" : ""}`}
                       >
                         <QrCode size={14} className="mr-2 text-primary" />
                         Marker AR
                       </Button>
                       <Button
                         size="sm"
-                        variant={trackingReport.mode === 'device-orientation' ? 'secondary' : 'outline'}
-                        onClick={() => handleModeChange('device-orientation')}
-                        className={`text-xs justify-start h-9 ${trackingReport.mode === 'device-orientation' ? 'border-primary' : ''}`}
+                        variant={
+                          trackingReport.mode === "device-orientation" ? "secondary" : "outline"
+                        }
+                        onClick={() => handleModeChange("device-orientation")}
+                        className={`text-xs justify-start h-9 ${trackingReport.mode === "device-orientation" ? "border-primary" : ""}`}
                       >
                         <Move size={14} className="mr-2 text-primary" />
                         Gyro Orientation
                       </Button>
                       <Button
                         size="sm"
-                        variant={trackingReport.mode === 'webxr-plane' ? 'secondary' : 'outline'}
-                        onClick={() => handleModeChange('webxr-plane')}
-                        className={`text-xs justify-start h-9 ${trackingReport.mode === 'webxr-plane' ? 'border-primary' : ''}`}
+                        variant={trackingReport.mode === "webxr-plane" ? "secondary" : "outline"}
+                        onClick={() => handleModeChange("webxr-plane")}
+                        className={`text-xs justify-start h-9 ${trackingReport.mode === "webxr-plane" ? "border-primary" : ""}`}
                       >
                         <Layers size={14} className="mr-2 text-primary" />
                         WebXR Plane
@@ -819,7 +815,9 @@ export function ARWorkspace({
                       <div className="space-y-2 pt-1">
                         <div className="flex items-center justify-between text-[11px] text-muted-foreground">
                           <span>{sessionState.lockedTarget.label}</span>
-                          <span className="font-mono">Score: {sessionState.lockedTarget.initialScore}/100</span>
+                          <span className="font-mono">
+                            Score: {sessionState.lockedTarget.initialScore}/100
+                          </span>
                         </div>
                         {sessionState.lockedTarget.snapshotUrl && (
                           <div className="h-16 w-full rounded-lg overflow-hidden border border-white/15 bg-black/40">
@@ -842,12 +840,13 @@ export function ARWorkspace({
                       </div>
                     ) : (
                       <p className="text-[11px] text-muted-foreground leading-relaxed">
-                        Aim the reticle at a distinct textured surface, painting, or object and tap "Scan Target" on the bottom shutter to calibrate tracking.
+                        Aim the reticle at a distinct textured surface, painting, or object and tap
+                        "Scan Target" on the bottom shutter to calibrate tracking.
                       </p>
                     )}
                   </div>
 
-                  {trackingReport.mode === 'marker' && (
+                  {trackingReport.mode === "marker" && (
                     <Button
                       variant="outline"
                       size="sm"
@@ -862,13 +861,13 @@ export function ARWorkspace({
               )}
 
               {/* TAB: SETTINGS & CALIBRATION */}
-              {activeDrawer === 'settings' && (
+              {activeDrawer === "settings" && (
                 <div className="space-y-3.5">
                   {/* Camera Controls */}
                   <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-2.5">
                     <span className="text-xs font-semibold text-white block">Camera Controls</span>
                     <div className="flex items-center gap-2">
-                      {sessionState.cameraStatus === 'running' ? (
+                      {sessionState.cameraStatus === "running" ? (
                         <Button
                           variant="destructive"
                           size="sm"
@@ -903,13 +902,15 @@ export function ARWorkspace({
 
                     {sessionState.availableCameras.length > 1 && (
                       <div className="space-y-1 pt-1">
-                        <label className="text-[11px] text-muted-foreground">Select Camera Device</label>
+                        <label className="text-[11px] text-muted-foreground">
+                          Select Camera Device
+                        </label>
                         <select
                           aria-label="Select Camera Device"
                           value={sessionState.selectedCameraId}
                           onChange={(e) => {
                             void sessionManager.camera.switchCamera(e.target.value).catch(() => {
-                              setFeedbackMessage('Failed to switch to the selected camera device.');
+                              setFeedbackMessage("Failed to switch to the selected camera device.");
                             });
                           }}
                           className="w-full bg-black/60 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white"
@@ -928,9 +929,7 @@ export function ARWorkspace({
                   <div className="p-3 bg-white/5 rounded-xl border border-white/10 space-y-2">
                     <div className="flex justify-between items-center text-xs">
                       <span className="font-semibold text-white">Tracking Smoothing Filter</span>
-                      <span className="text-[11px] text-muted-foreground font-mono">
-                        Adaptive
-                      </span>
+                      <span className="text-[11px] text-muted-foreground font-mono">Adaptive</span>
                     </div>
                     <input
                       aria-label="Tracking Smoothing Factor"
@@ -953,8 +952,16 @@ export function ARWorkspace({
                   {/* WebXR Plane Capability info */}
                   <div className="p-2.5 rounded-lg bg-white/5 border border-white/10 flex items-center justify-between text-xs text-muted-foreground">
                     <span>WebXR Native Immersive-AR:</span>
-                    <span className={sessionState.isWebXRSupported ? 'text-emerald-400 font-bold' : 'text-amber-400 font-semibold'}>
-                      {sessionState.isWebXRSupported ? '✓ Supported' : 'Not Supported (Using Optical AR)'}
+                    <span
+                      className={
+                        sessionState.isWebXRSupported
+                          ? "text-emerald-400 font-bold"
+                          : "text-amber-400 font-semibold"
+                      }
+                    >
+                      {sessionState.isWebXRSupported
+                        ? "✓ Supported"
+                        : "Not Supported (Using Optical AR)"}
                     </span>
                   </div>
                 </div>
@@ -968,8 +975,8 @@ export function ARWorkspace({
       <footer className="ar-floating-menu-bar">
         {/* Left Item: Objects */}
         <button
-          onClick={() => setActiveDrawer(activeDrawer === 'objects' ? null : 'objects')}
-          className={`ar-menu-item ${activeDrawer === 'objects' ? 'active' : ''}`}
+          onClick={() => setActiveDrawer(activeDrawer === "objects" ? null : "objects")}
+          className={`ar-menu-item ${activeDrawer === "objects" ? "active" : ""}`}
           title="Scene Objects"
         >
           <div className="relative">
@@ -983,8 +990,8 @@ export function ARWorkspace({
 
         {/* Left Item: Adjust / Transforms */}
         <button
-          onClick={() => setActiveDrawer(activeDrawer === 'adjust' ? null : 'adjust')}
-          className={`ar-menu-item ${activeDrawer === 'adjust' ? 'active' : ''}`}
+          onClick={() => setActiveDrawer(activeDrawer === "adjust" ? null : "adjust")}
+          className={`ar-menu-item ${activeDrawer === "adjust" ? "active" : ""}`}
           title="Adjust Placement & Transforms"
         >
           <Sliders size={18} />
@@ -992,12 +999,8 @@ export function ARWorkspace({
         </button>
 
         {/* Center Prominent Shutter Button */}
-        {sessionState.cameraStatus === 'idle' ? (
-          <button
-            onClick={handleStartCamera}
-            className="ar-shutter-btn"
-            title="Start AR Camera"
-          >
+        {sessionState.cameraStatus === "idle" ? (
+          <button onClick={handleStartCamera} className="ar-shutter-btn" title="Start AR Camera">
             <Camera size={24} />
           </button>
         ) : sessionState.targetCandidate && !sessionState.lockedTarget ? (
@@ -1028,8 +1031,8 @@ export function ARWorkspace({
 
         {/* Right Item: Tracking Mode */}
         <button
-          onClick={() => setActiveDrawer(activeDrawer === 'tracking' ? null : 'tracking')}
-          className={`ar-menu-item ${activeDrawer === 'tracking' ? 'active' : ''}`}
+          onClick={() => setActiveDrawer(activeDrawer === "tracking" ? null : "tracking")}
+          className={`ar-menu-item ${activeDrawer === "tracking" ? "active" : ""}`}
           title="Tracking Mode & Calibration"
         >
           <Crosshair size={18} />
@@ -1038,8 +1041,8 @@ export function ARWorkspace({
 
         {/* Right Item: Settings */}
         <button
-          onClick={() => setActiveDrawer(activeDrawer === 'settings' ? null : 'settings')}
-          className={`ar-menu-item ${activeDrawer === 'settings' ? 'active' : ''}`}
+          onClick={() => setActiveDrawer(activeDrawer === "settings" ? null : "settings")}
+          className={`ar-menu-item ${activeDrawer === "settings" ? "active" : ""}`}
           title="Camera & App Settings"
         >
           <Settings size={18} />
@@ -1066,7 +1069,8 @@ export function ARWorkspace({
               </Button>
             </div>
             <p className="text-xs text-muted-foreground">
-              Addis AR uses high-contrast 3x3 square fiducial markers for high-precision 6-DoF pose estimation.
+              Addis AR uses high-contrast 3x3 square fiducial markers for high-precision 6-DoF pose
+              estimation.
             </p>
             <div className="flex justify-center p-4 bg-white rounded-xl">
               <div
@@ -1079,8 +1083,8 @@ export function ARWorkspace({
               className="w-full text-xs font-semibold"
               onClick={() => {
                 const svg = MarkerDetector.generateMarkerSVG(1, 400);
-                const blob = new Blob([svg], { type: 'image/svg+xml' });
-                download(blob, 'addis-ar-marker-1.svg');
+                const blob = new Blob([svg], { type: "image/svg+xml" });
+                download(blob, "addis-ar-marker-1.svg");
               }}
             >
               <Download size={13} className="mr-1.5" />
@@ -1109,22 +1113,25 @@ export function ARWorkspace({
             </div>
             <div className="space-y-2 text-xs text-muted-foreground leading-relaxed">
               <p>
-                <strong className="text-white">1. Full-Screen AR Viewport:</strong> The camera feed takes 100% of the screen. Tap "Adjust" on the bottom menu bar to open placement sliders while watching your 3D model in real time.
+                <strong className="text-white">1. Full-Screen AR Viewport:</strong> The camera feed
+                takes 100% of the screen. Tap "Adjust" on the bottom menu bar to open placement
+                sliders while watching your 3D model in real time.
               </p>
               <p>
-                <strong className="text-white">2. Focus Target:</strong> Center the reticle on any textured surface, painting, or object with contrast and tap the center shutter button to anchor.
+                <strong className="text-white">2. Focus Target:</strong> Center the reticle on any
+                textured surface, painting, or object with contrast and tap the center shutter
+                button to anchor.
               </p>
               <p>
-                <strong className="text-white">3. Marker AR:</strong> Tracks high-precision fiducial markers for exact millimeter anchoring.
+                <strong className="text-white">3. Marker AR:</strong> Tracks high-precision fiducial
+                markers for exact millimeter anchoring.
               </p>
               <p>
-                <strong className="text-white">4. Gyro Orientation:</strong> Uses device motion sensors for lightweight viewing without visual targets.
+                <strong className="text-white">4. Gyro Orientation:</strong> Uses device motion
+                sensors for lightweight viewing without visual targets.
               </p>
             </div>
-            <Button
-              className="w-full text-xs mt-2"
-              onClick={() => setShowInfoDialog(false)}
-            >
+            <Button className="w-full text-xs mt-2" onClick={() => setShowInfoDialog(false)}>
               Got it
             </Button>
           </div>

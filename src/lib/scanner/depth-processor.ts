@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import type { EstimatedCameraPose } from './pose-estimator';
+import * as THREE from "three";
+import type { EstimatedCameraPose } from "./pose-estimator";
 
 export interface DepthObservation {
   width: number;
@@ -15,7 +15,7 @@ export interface DepthObservation {
 
 export interface FusedDepthPointCloud {
   positions: Float32Array; // [x, y, z, ...]
-  colors: Float32Array;    // [r, g, b, ...]
+  colors: Float32Array; // [r, g, b, ...]
   pointCount: number;
   bounds: {
     min: THREE.Vector3;
@@ -28,9 +28,12 @@ export interface FusedDepthPointCloud {
  * Checks whether WebXR Depth Sensing API is available in the current runtime.
  */
 export function isWebXRDepthSupported(): boolean {
-  if (typeof window === 'undefined' || !navigator.xr) return false;
-  return typeof (window as any).XRDepthInformation !== 'undefined' ||
-    typeof (window as any).XRCPUDepthInformation !== 'undefined';
+  if (typeof window === "undefined" || !navigator.xr) return false;
+  const win = window as unknown as Record<string, unknown>;
+  return (
+    typeof win["XRDepthInformation"] !== "undefined" ||
+    typeof win["XRCPUDepthInformation"] !== "undefined"
+  );
 }
 
 /**
@@ -43,8 +46,8 @@ export function validateAndCalibrateDepth(
   height: number,
   scaleToMeters: number = 0.001, // ARCore 16-bit depth is in millimeters
   minDepthMeters: number = 0.15,
-  maxDepthMeters: number = 1.20,
-  confidenceMap?: Uint8Array | Float32Array
+  maxDepthMeters: number = 1.2,
+  confidenceMap?: Uint8Array | Float32Array,
 ): DepthObservation | null {
   const totalPixels = width * height;
   if (totalPixels === 0 || rawDepth.length < totalPixels) return null;
@@ -55,9 +58,10 @@ export function validateAndCalibrateDepth(
 
   for (let i = 0; i < totalPixels; i++) {
     const rawVal = rawDepth[i] ?? 0;
-    const depthMeters = typeof rawDepth === 'object' && rawDepth instanceof Uint16Array
-      ? rawVal * scaleToMeters
-      : rawVal;
+    const depthMeters =
+      typeof rawDepth === "object" && rawDepth instanceof Uint16Array
+        ? rawVal * scaleToMeters
+        : rawVal;
 
     // Check confidence if provided (ARCore confidence is 0-255 or 0-1)
     let conf = 1.0;
@@ -96,6 +100,13 @@ export function validateAndCalibrateDepth(
   };
 }
 
+export interface DepthCameraPose {
+  position: THREE.Vector3;
+  viewProjMatrix?: THREE.Matrix4;
+  viewMatrix?: THREE.Matrix4;
+  matrix?: THREE.Matrix4;
+}
+
 /**
  * Fuses calibrated depth observations with 6-DoF camera poses into a metric 3D point cloud.
  * Back-projects pixel coordinates into camera space and transforms to world coordinates.
@@ -103,10 +114,10 @@ export function validateAndCalibrateDepth(
 export function fuseDepthObservations(
   observations: Array<{
     depth: DepthObservation;
-    pose: EstimatedCameraPose;
+    pose: EstimatedCameraPose | DepthCameraPose;
     colorData?: Uint8ClampedArray;
   }>,
-  maxPoints: number = 24000
+  maxPoints: number = 24000,
 ): FusedDepthPointCloud {
   const worldPoints: Array<{ pos: THREE.Vector3; color: [number, number, number] }> = [];
   const min = new THREE.Vector3(Infinity, Infinity, Infinity);
@@ -116,10 +127,17 @@ export function fuseDepthObservations(
     const { width, height, depthBuffer } = depth;
     const invViewProj = pose.viewProjMatrix
       ? new THREE.Matrix4().copy(pose.viewProjMatrix).invert()
-      : new THREE.Matrix4().copy(pose.matrix);
+      : "viewMatrix" in pose && pose.viewMatrix
+        ? new THREE.Matrix4().copy(pose.viewMatrix).invert()
+        : "matrix" in pose && pose.matrix
+          ? new THREE.Matrix4().copy(pose.matrix).invert()
+          : new THREE.Matrix4().identity();
 
     // Stride to maintain interactive performance while sampling dense surfaces
-    const stride = Math.max(2, Math.floor(Math.sqrt((width * height * observations.length) / maxPoints)));
+    const stride = Math.max(
+      2,
+      Math.floor(Math.sqrt((width * height * observations.length) / maxPoints)),
+    );
 
     for (let y = 0; y < height; y += stride) {
       for (let x = 0; x < width; x += stride) {
@@ -137,7 +155,9 @@ export function fuseDepthObservations(
         const worldPos = new THREE.Vector3().copy(pose.position).addScaledVector(rayDir, d);
 
         // Fetch RGB color if available
-        let r = 0.5, g = 0.5, b = 0.5;
+        let r = 0.5,
+          g = 0.5,
+          b = 0.5;
         if (colorData) {
           const cIdx = (y * width + x) * 4;
           r = (colorData[cIdx] ?? 128) / 255;

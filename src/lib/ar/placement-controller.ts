@@ -1,5 +1,5 @@
-import * as THREE from 'three';
-import type { SceneObject } from './projects';
+import * as THREE from "three";
+import type { SceneObject } from "./projects";
 
 export class PlacementController {
   private static readonly GROUND_PLANE = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0);
@@ -63,13 +63,13 @@ export class PlacementController {
    */
   public static fineStep(
     object: SceneObject,
-    field: 'position' | 'rotation' | 'scale',
+    field: "position" | "rotation" | "scale",
     axisIndex: 0 | 1 | 2,
-    delta: number
+    delta: number,
   ): SceneObject {
     const arr = [...object[field]] as [number, number, number];
     arr[axisIndex] = Number((arr[axisIndex] + delta).toFixed(3));
-    if (field === 'scale' && arr[axisIndex] < 0.05) {
+    if (field === "scale" && arr[axisIndex] < 0.05) {
       arr[axisIndex] = 0.05;
     }
     return {
@@ -84,7 +84,7 @@ export class PlacementController {
   public static screenPointToGround(
     normalizedX: number, // -1..1
     normalizedY: number, // -1..1
-    camera: THREE.Camera
+    camera: THREE.Camera,
   ): [number, number, number] | null {
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(normalizedX, normalizedY), camera);

@@ -14,7 +14,7 @@ export interface SegmentationResult {
  * Automatically extracts the foreground object and removes the background.
  */
 export async function segmentForeground(
-  imageSource: HTMLImageElement | HTMLCanvasElement | string
+  imageSource: HTMLImageElement | HTMLCanvasElement | string,
 ): Promise<SegmentationResult> {
   const img = await resolveImageElement(imageSource);
   const maxDim = 640; // High enough for clean silhouette, optimized for mobile memory
@@ -22,11 +22,11 @@ export async function segmentForeground(
   const width = Math.round(img.width * scale);
   const height = Math.round(img.height * scale);
 
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
-  if (!ctx) throw new Error('Could not create 2D canvas context');
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) throw new Error("Could not create 2D canvas context");
 
   ctx.drawImage(img, 0, 0, width, height);
   const imgData = ctx.getImageData(0, 0, width, height);
@@ -43,11 +43,7 @@ export async function segmentForeground(
 
   for (let y = Math.floor(height * 0.25); y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (
-        x < borderMarginX ||
-        x >= width - borderMarginX ||
-        y >= height - borderMarginY
-      ) {
+      if (x < borderMarginX || x >= width - borderMarginX || y >= height - borderMarginY) {
         if ((x + y) % 3 === 0) {
           const idx = (y * width + x) * 4;
           bgR.push(data[idx] ?? 0);
@@ -76,10 +72,14 @@ export async function segmentForeground(
       const idxT = ((y - 1) * width + x) * 4;
       const idxB = ((y + 1) * width + x) * 4;
 
-      const lumL = 0.299 * (data[idxL] ?? 0) + 0.587 * (data[idxL + 1] ?? 0) + 0.114 * (data[idxL + 2] ?? 0);
-      const lumR = 0.299 * (data[idxR] ?? 0) + 0.587 * (data[idxR + 1] ?? 0) + 0.114 * (data[idxR + 2] ?? 0);
-      const lumT = 0.299 * (data[idxT] ?? 0) + 0.587 * (data[idxT + 1] ?? 0) + 0.114 * (data[idxT + 2] ?? 0);
-      const lumB = 0.299 * (data[idxB] ?? 0) + 0.587 * (data[idxB + 1] ?? 0) + 0.114 * (data[idxB + 2] ?? 0);
+      const lumL =
+        0.299 * (data[idxL] ?? 0) + 0.587 * (data[idxL + 1] ?? 0) + 0.114 * (data[idxL + 2] ?? 0);
+      const lumR =
+        0.299 * (data[idxR] ?? 0) + 0.587 * (data[idxR + 1] ?? 0) + 0.114 * (data[idxR + 2] ?? 0);
+      const lumT =
+        0.299 * (data[idxT] ?? 0) + 0.587 * (data[idxT + 1] ?? 0) + 0.114 * (data[idxT + 2] ?? 0);
+      const lumB =
+        0.299 * (data[idxB] ?? 0) + 0.587 * (data[idxB + 1] ?? 0) + 0.114 * (data[idxB + 2] ?? 0);
 
       const dx = lumR - lumL;
       const dy = lumB - lumT;
@@ -117,18 +117,11 @@ export async function segmentForeground(
       const isBlanketSurface = colorDist < 42;
 
       // Dark case identification: low luminance, textured leather, zipper edges, distinctly non-blanket
-      const isDarkCase =
-        lum < 85 &&
-        colorDist > 48 &&
-        isWithinObjectRadius &&
-        isNotTopBackground;
+      const isDarkCase = lum < 85 && colorDist > 48 && isWithinObjectRadius && isNotTopBackground;
 
       // General foreground object (high contrast or strong gradient edge with non-blanket color)
       const isGeneralForeground =
-        colorDist > 58 &&
-        !isBlanketSurface &&
-        isWithinObjectRadius &&
-        isNotTopBackground;
+        colorDist > 58 && !isBlanketSurface && isWithinObjectRadius && isNotTopBackground;
 
       if (isDarkCase || isGeneralForeground) {
         mask[y * width + x] = 255;
@@ -143,16 +136,16 @@ export async function segmentForeground(
   const smoothedMask = smoothMask(mask, width, height);
 
   // 4. Create transparent image and black-and-white mask
-  const maskCanvas = document.createElement('canvas');
+  const maskCanvas = document.createElement("canvas");
   maskCanvas.width = width;
   maskCanvas.height = height;
-  const maskCtx = maskCanvas.getContext('2d')!;
+  const maskCtx = maskCanvas.getContext("2d")!;
   const maskImgData = maskCtx.createImageData(width, height);
 
-  const transCanvas = document.createElement('canvas');
+  const transCanvas = document.createElement("canvas");
   transCanvas.width = width;
   transCanvas.height = height;
-  const transCtx = transCanvas.getContext('2d')!;
+  const transCtx = transCanvas.getContext("2d")!;
   const transImgData = transCtx.createImageData(width, height);
 
   for (let i = 0; i < width * height; i++) {
@@ -176,8 +169,8 @@ export async function segmentForeground(
   transCtx.putImageData(transImgData, 0, 0);
 
   return {
-    maskDataUrl: maskCanvas.toDataURL('image/png'),
-    transparentDataUrl: transCanvas.toDataURL('image/png'),
+    maskDataUrl: maskCanvas.toDataURL("image/png"),
+    transparentDataUrl: transCanvas.toDataURL("image/png"),
     foregroundRatio: foregroundCount / (width * height),
   };
 }
@@ -185,11 +178,7 @@ export async function segmentForeground(
 /**
  * Simple 3x3 median and morphological filter to reduce salt-and-pepper noise.
  */
-function smoothMask(
-  input: Uint8Array,
-  width: number,
-  height: number
-): Uint8Array {
+function smoothMask(input: Uint8Array, width: number, height: number): Uint8Array {
   const output = new Uint8Array(width * height);
 
   for (let y = 1; y < height - 1; y++) {
@@ -218,8 +207,8 @@ export async function applyBrushEdit(
   originalDataUrl: string,
   currentMaskDataUrl: string,
   editPoints: Array<{ x: number; y: number }>,
-  mode: 'restore' | 'erase',
-  brushRadius: number = 18
+  mode: "restore" | "erase",
+  brushRadius: number = 18,
 ): Promise<{ maskDataUrl: string; transparentDataUrl: string }> {
   const origImg = await resolveImageElement(originalDataUrl);
   const maskImg = await resolveImageElement(currentMaskDataUrl);
@@ -227,18 +216,18 @@ export async function applyBrushEdit(
   const width = maskImg.width;
   const height = maskImg.height;
 
-  const maskCanvas = document.createElement('canvas');
+  const maskCanvas = document.createElement("canvas");
   maskCanvas.width = width;
   maskCanvas.height = height;
-  const maskCtx = maskCanvas.getContext('2d')!;
+  const maskCtx = maskCanvas.getContext("2d")!;
   maskCtx.drawImage(maskImg, 0, 0);
 
   // Paint brush strokes
-  maskCtx.fillStyle = mode === 'restore' ? '#ffffff' : '#000000';
-  maskCtx.strokeStyle = mode === 'restore' ? '#ffffff' : '#000000';
+  maskCtx.fillStyle = mode === "restore" ? "#ffffff" : "#000000";
+  maskCtx.strokeStyle = mode === "restore" ? "#ffffff" : "#000000";
   maskCtx.lineWidth = brushRadius * 2;
-  maskCtx.lineCap = 'round';
-  maskCtx.lineJoin = 'round';
+  maskCtx.lineCap = "round";
+  maskCtx.lineJoin = "round";
 
   const firstPt = editPoints[0];
   if (editPoints.length === 1 && firstPt) {
@@ -260,10 +249,10 @@ export async function applyBrushEdit(
   // Combine original with updated mask to recreate transparent PNG
   const updatedMaskData = maskCtx.getImageData(0, 0, width, height).data;
 
-  const origCanvas = document.createElement('canvas');
+  const origCanvas = document.createElement("canvas");
   origCanvas.width = width;
   origCanvas.height = height;
-  const origCtx = origCanvas.getContext('2d')!;
+  const origCtx = origCanvas.getContext("2d")!;
   origCtx.drawImage(origImg, 0, 0, width, height);
   const origImgData = origCtx.getImageData(0, 0, width, height);
 
@@ -274,22 +263,22 @@ export async function applyBrushEdit(
   origCtx.putImageData(origImgData, 0, 0);
 
   return {
-    maskDataUrl: maskCanvas.toDataURL('image/png'),
-    transparentDataUrl: origCanvas.toDataURL('image/png'),
+    maskDataUrl: maskCanvas.toDataURL("image/png"),
+    transparentDataUrl: origCanvas.toDataURL("image/png"),
   };
 }
 
 function resolveImageElement(
-  source: HTMLImageElement | HTMLCanvasElement | string
+  source: HTMLImageElement | HTMLCanvasElement | string,
 ): Promise<HTMLImageElement | HTMLCanvasElement> {
-  if (typeof source !== 'string') {
+  if (typeof source !== "string") {
     return Promise.resolve(source);
   }
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = () => reject(new Error('Failed to load image for segmentation'));
+    img.onerror = () => reject(new Error("Failed to load image for segmentation"));
     img.src = source;
   });
 }

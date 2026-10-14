@@ -1,4 +1,4 @@
-import type { PhotoQuality } from './types';
+import type { PhotoQuality } from "./types";
 
 /**
  * Validates a captured image for photogrammetry suitability:
@@ -7,15 +7,15 @@ import type { PhotoQuality } from './types';
  * - Estimates visual feature richness (gradient corner density).
  */
 export async function validateImageQuality(
-  imgOrCanvas: HTMLImageElement | HTMLCanvasElement
+  imgOrCanvas: HTMLImageElement | HTMLCanvasElement,
 ): Promise<PhotoQuality> {
   const width = 320; // Downscale to fixed dimension for fast, deterministic evaluation
   const height = Math.round((imgOrCanvas.height / imgOrCanvas.width) * width) || 240;
 
-  const canvas = document.createElement('canvas');
+  const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
-  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) {
     return createDefaultQuality();
   }
@@ -43,10 +43,8 @@ export async function validateImageQuality(
   const avgLuminance = luminanceSum / (width * height);
 
   // Check exposure
-  const darkFraction =
-    (hist.slice(0, 35).reduce((a, b) => a + b, 0)) / (width * height);
-  const brightFraction =
-    (hist.slice(225).reduce((a, b) => a + b, 0)) / (width * height);
+  const darkFraction = hist.slice(0, 35).reduce((a, b) => a + b, 0) / (width * height);
+  const brightFraction = hist.slice(225).reduce((a, b) => a + b, 0) / (width * height);
 
   const isUnderExposed = avgLuminance < 45 || darkFraction > 0.5;
   const isOverExposed = avgLuminance > 215 || brightFraction > 0.45;
@@ -81,9 +79,7 @@ export async function validateImageQuality(
 
   const laplacianMean = validPixels > 0 ? laplacianSum / validPixels : 0;
   const laplacianVariance =
-    validPixels > 0
-      ? laplacianSqSum / validPixels - laplacianMean * laplacianMean
-      : 0;
+    validPixels > 0 ? laplacianSqSum / validPixels - laplacianMean * laplacianMean : 0;
 
   // Normalize blurScore (0 to 100)
   // Higher variance means sharper image. Under 60 is typically noticeably blurry.
@@ -95,16 +91,16 @@ export async function validateImageQuality(
   // Build user warnings
   const warnings: string[] = [];
   if (isBlurry) {
-    warnings.push('Image appears blurry. Hold phone steady or refocus.');
+    warnings.push("Image appears blurry. Hold phone steady or refocus.");
   }
   if (isUnderExposed) {
-    warnings.push('Image is dark. Add more lighting to the object.');
+    warnings.push("Image is dark. Add more lighting to the object.");
   }
   if (isOverExposed) {
-    warnings.push('Image is washed out. Avoid harsh direct glare.');
+    warnings.push("Image is washed out. Avoid harsh direct glare.");
   }
   if (!hasSufficientFeatures) {
-    warnings.push('Low surface detail. Ensure object has visible texture or markings.');
+    warnings.push("Low surface detail. Ensure object has visible texture or markings.");
   }
 
   // Calculate overall score (0 - 100)

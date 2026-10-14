@@ -1,8 +1,4 @@
-import {
-  TargetAnalyzer,
-  type ROI,
-  type TrackabilityReport,
-} from './vision/target-analyzer';
+import { TargetAnalyzer, type ROI, type TrackabilityReport } from "./vision/target-analyzer";
 
 export interface LockedTargetData {
   id: string;
@@ -18,7 +14,7 @@ export interface LockedTargetData {
 
 export type TargetEventCallback = (
   candidate: TrackabilityReport | null,
-  locked: LockedTargetData | null
+  locked: LockedTargetData | null,
 ) => void;
 
 export class TargetManager {
@@ -70,8 +66,8 @@ export class TargetManager {
   /**
    * Confirms the scanned candidate and locks it as the active tracking target.
    */
-  public confirmCandidate(video: HTMLVideoElement, label = 'Focused Target'): boolean {
-    if (!this.candidate || this.candidate.quality === 'unsuitable') {
+  public confirmCandidate(video: HTMLVideoElement, label = "Focused Target"): boolean {
+    if (!this.candidate || this.candidate.quality === "unsuitable") {
       return false;
     }
 
@@ -83,7 +79,7 @@ export class TargetManager {
       templateData: template.data,
       templateWidth: template.width,
       templateHeight: template.height,
-      snapshotUrl: template.snapshotUrl || this.candidate.snapshotUrl || '',
+      snapshotUrl: template.snapshotUrl || this.candidate.snapshotUrl || "",
       initialScore: this.candidate.score,
       roi: { ...this.currentROI },
       lockedAt: Date.now(),

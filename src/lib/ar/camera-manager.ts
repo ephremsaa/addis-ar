@@ -1,17 +1,10 @@
 export type CameraStatus =
-  | 'idle'
-  | 'requesting'
-  | 'running'
-  | 'denied'
-  | 'not-found'
-  | 'in-use'
-  | 'insecure'
-  | 'error';
+  "idle" | "requesting" | "running" | "denied" | "not-found" | "in-use" | "insecure" | "error";
 
 export interface CameraDeviceInfo {
   deviceId: string;
   label: string;
-  facingMode?: 'environment' | 'user';
+  facingMode?: "environment" | "user" | undefined;
 }
 
 export type CameraEventCallback = (status: CameraStatus, error?: string) => void;
@@ -19,11 +12,11 @@ export type CameraEventCallback = (status: CameraStatus, error?: string) => void
 export class CameraManager {
   private stream: MediaStream | null = null;
   private videoElement: HTMLVideoElement | null = null;
-  private status: CameraStatus = 'idle';
-  private errorMessage = '';
+  private status: CameraStatus = "idle";
+  private errorMessage = "";
   private availableCameras: CameraDeviceInfo[] = [];
-  private selectedDeviceId = '';
-  private currentFacing: 'environment' | 'user' = 'environment';
+  private selectedDeviceId = "";
+  private currentFacing: "environment" | "user" = "environment";
   private listeners: Set<CameraEventCallback> = new Set();
 
   constructor() {
@@ -31,19 +24,19 @@ export class CameraManager {
   }
 
   public isSecureContext(): boolean {
-    if (typeof window === 'undefined') return false;
+    if (typeof window === "undefined") return false;
     const isLocal =
-      window.location.hostname === 'localhost' ||
-      window.location.hostname === '127.0.0.1' ||
-      window.location.hostname === '[::1]';
+      window.location.hostname === "localhost" ||
+      window.location.hostname === "127.0.0.1" ||
+      window.location.hostname === "[::1]";
     return Boolean(window.isSecureContext || isLocal);
   }
 
   private checkSecureContext(): boolean {
     if (!this.isSecureContext()) {
-      this.status = 'insecure';
+      this.status = "insecure";
       this.errorMessage =
-        'Camera access requires a secure connection (HTTPS) or localhost. Please test on HTTPS or local development server.';
+        "Camera access requires a secure connection (HTTPS) or localhost. Please test on HTTPS or local development server.";
       return false;
     }
     return true;
@@ -69,7 +62,7 @@ export class CameraManager {
     return this.selectedDeviceId;
   }
 
-  public getCurrentFacing(): 'environment' | 'user' {
+  public getCurrentFacing(): "environment" | "user" {
     return this.currentFacing;
   }
 
@@ -84,7 +77,7 @@ export class CameraManager {
 
   private notify(status: CameraStatus, error?: string) {
     this.status = status;
-    this.errorMessage = error || '';
+    this.errorMessage = error || "";
     for (const cb of this.listeners) {
       cb(status, error);
     }
@@ -94,21 +87,21 @@ export class CameraManager {
    * Enumerates connected video input devices without requesting permission.
    */
   public async enumerateCameras(): Promise<CameraDeviceInfo[]> {
-    if (typeof navigator === 'undefined' || !navigator.mediaDevices?.enumerateDevices) {
+    if (typeof navigator === "undefined" || !navigator.mediaDevices?.enumerateDevices) {
       return [];
     }
 
     try {
       const devices = await navigator.mediaDevices.enumerateDevices();
-      const videoInputs = devices.filter((d) => d.kind === 'videoinput');
+      const videoInputs = devices.filter((d) => d.kind === "videoinput");
 
       this.availableCameras = videoInputs.map((d, index) => {
-        let facing: 'environment' | 'user' | undefined;
+        let facing: "environment" | "user" | undefined;
         const lbl = d.label.toLowerCase();
-        if (lbl.includes('back') || lbl.includes('rear') || lbl.includes('environment')) {
-          facing = 'environment';
-        } else if (lbl.includes('front') || lbl.includes('user') || lbl.includes('selfie')) {
-          facing = 'user';
+        if (lbl.includes("back") || lbl.includes("rear") || lbl.includes("environment")) {
+          facing = "environment";
+        } else if (lbl.includes("front") || lbl.includes("user") || lbl.includes("selfie")) {
+          facing = "user";
         }
 
         return {
@@ -129,24 +122,24 @@ export class CameraManager {
    */
   public async startCamera(
     preferredDeviceId?: string,
-    preferredFacing: 'environment' | 'user' = 'environment'
+    preferredFacing: "environment" | "user" = "environment",
   ): Promise<MediaStream> {
     if (!this.checkSecureContext()) {
       const err = this.errorMessage;
-      this.notify('insecure', err);
+      this.notify("insecure", err);
       throw new Error(err);
     }
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      const err = 'MediaDevices API not supported on this device/browser.';
-      this.notify('error', err);
+      const err = "MediaDevices API not supported on this device/browser.";
+      this.notify("error", err);
       throw new Error(err);
     }
 
     // Stop existing stream if active
     this.stopCamera();
 
-    this.notify('requesting');
+    this.notify("requesting");
     this.currentFacing = preferredFacing;
 
     const constraints: MediaStreamConstraints = {
@@ -176,12 +169,12 @@ export class CameraManager {
           this.selectedDeviceId = settings.deviceId;
         }
         if (settings.facingMode) {
-          this.currentFacing = settings.facingMode as 'environment' | 'user';
+          this.currentFacing = settings.facingMode as "environment" | "user";
         }
 
         // Handle track ended or muted
         track.onended = () => {
-          this.notify('idle', 'Camera disconnected.');
+          this.notify("idle", "Camera disconnected.");
         };
       }
 
@@ -198,24 +191,24 @@ export class CameraManager {
         }
       }
 
-      this.notify('running');
+      this.notify("running");
       return stream;
     } catch (err: unknown) {
       const error = err as { name?: string; message?: string };
-      let status: CameraStatus = 'error';
-      let message = 'Unable to access camera.';
+      let status: CameraStatus = "error";
+      let message = "Unable to access camera.";
 
-      if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
-        status = 'denied';
+      if (error.name === "NotAllowedError" || error.name === "PermissionDeniedError") {
+        status = "denied";
         message =
-          'Camera permission was denied. Please allow camera access in your browser site permissions to use AR.';
-      } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
-        status = 'not-found';
-        message = 'No camera device found on this system.';
-      } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
-        status = 'in-use';
-        message = 'Camera is already in use by another application or tab.';
-      } else if (error.name === 'OverconstrainedError') {
+          "Camera permission was denied. Please allow camera access in your browser site permissions to use AR.";
+      } else if (error.name === "NotFoundError" || error.name === "DevicesNotFoundError") {
+        status = "not-found";
+        message = "No camera device found on this system.";
+      } else if (error.name === "NotReadableError" || error.name === "TrackStartError") {
+        status = "in-use";
+        message = "Camera is already in use by another application or tab.";
+      } else if (error.name === "OverconstrainedError") {
         // Fallback to minimal video constraint
         try {
           const fallbackStream = await navigator.mediaDevices.getUserMedia({ video: true });
@@ -225,10 +218,10 @@ export class CameraManager {
             await this.videoElement.play();
           }
           await this.enumerateCameras();
-          this.notify('running');
+          this.notify("running");
           return fallbackStream;
         } catch {
-          message = 'Camera requested resolution or facing mode is unsupported.';
+          message = "Camera requested resolution or facing mode is unsupported.";
         }
       } else if (error.message) {
         message = error.message;
@@ -262,7 +255,7 @@ export class CameraManager {
    * Toggles between environment (rear) and user (front) camera.
    */
   public async toggleFacingMode(): Promise<MediaStream> {
-    const nextFacing = this.currentFacing === 'environment' ? 'user' : 'environment';
+    const nextFacing = this.currentFacing === "environment" ? "user" : "environment";
     return this.startCamera(undefined, nextFacing);
   }
 
@@ -281,8 +274,8 @@ export class CameraManager {
       this.videoElement.srcObject = null;
     }
 
-    if (this.status === 'running' || this.status === 'requesting') {
-      this.notify('idle');
+    if (this.status === "running" || this.status === "requesting") {
+      this.notify("idle");
     }
   }
 
@@ -291,10 +284,10 @@ export class CameraManager {
    */
   public captureFrame(): HTMLCanvasElement | null {
     if (!this.videoElement || !this.videoElement.videoWidth) return null;
-    const canvas = document.createElement('canvas');
+    const canvas = document.createElement("canvas");
     canvas.width = this.videoElement.videoWidth;
     canvas.height = this.videoElement.videoHeight;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return null;
     ctx.drawImage(this.videoElement, 0, 0);
     return canvas;

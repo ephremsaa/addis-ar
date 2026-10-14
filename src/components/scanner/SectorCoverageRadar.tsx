@@ -1,5 +1,5 @@
-import React from 'react';
-import type { ScanPhoto } from '@/lib/scanner/types';
+import React from "react";
+import type { ScanPhoto } from "@/lib/scanner/types";
 
 export interface SectorState {
   id: string;
@@ -8,7 +8,7 @@ export interface SectorState {
   angleDeg: number; // 0 = Front, 90 = Right, 180 = Back, 270 = Left
   isElevation?: boolean;
   count: number;
-  status: 'gray' | 'purple' | 'green' | 'orange';
+  status: "gray" | "purple" | "green" | "orange";
 }
 
 interface SectorCoverageRadarProps {
@@ -16,22 +16,22 @@ interface SectorCoverageRadarProps {
   currentAzimuth?: number;
   currentElevation?: number;
   rejectedCount?: number;
-  trackingStatus?: 'optimal' | 'limited' | 'lost' | 'idle';
+  trackingStatus?: "optimal" | "limited" | "lost" | "idle";
   trackingConfidence?: number;
   currentPass?: number;
-  mode?: 'floating' | 'panel';
+  mode?: "floating" | "panel";
   onSectorClick?: (sectorId: string) => void;
 }
 
 const SECTOR_DEFINITIONS = [
-  { id: 'front', label: 'Front', shortLabel: 'F', angleDeg: 0 },
-  { id: 'front-right', label: 'Front-Right', shortLabel: 'FR', angleDeg: 45 },
-  { id: 'right', label: 'Right', shortLabel: 'R', angleDeg: 90 },
-  { id: 'back-right', label: 'Back-Right', shortLabel: 'BR', angleDeg: 135 },
-  { id: 'back', label: 'Back', shortLabel: 'B', angleDeg: 180 },
-  { id: 'back-left', label: 'Back-Left', shortLabel: 'BL', angleDeg: 225 },
-  { id: 'left', label: 'Left', shortLabel: 'L', angleDeg: 270 },
-  { id: 'front-left', label: 'Front-Left', shortLabel: 'FL', angleDeg: 315 },
+  { id: "front", label: "Front", shortLabel: "F", angleDeg: 0 },
+  { id: "front-right", label: "Front-Right", shortLabel: "FR", angleDeg: 45 },
+  { id: "right", label: "Right", shortLabel: "R", angleDeg: 90 },
+  { id: "back-right", label: "Back-Right", shortLabel: "BR", angleDeg: 135 },
+  { id: "back", label: "Back", shortLabel: "B", angleDeg: 180 },
+  { id: "back-left", label: "Back-Left", shortLabel: "BL", angleDeg: 225 },
+  { id: "left", label: "Left", shortLabel: "L", angleDeg: 270 },
+  { id: "front-left", label: "Front-Left", shortLabel: "FL", angleDeg: 315 },
 ];
 
 export function SectorCoverageRadar({
@@ -39,44 +39,48 @@ export function SectorCoverageRadar({
   currentAzimuth = 0,
   currentElevation = 20,
   rejectedCount = 0,
-  trackingStatus = 'optimal',
+  trackingStatus = "optimal",
   trackingConfidence = 0.9,
   currentPass = 1,
-  mode = 'floating',
+  mode = "floating",
   onSectorClick,
 }: SectorCoverageRadarProps) {
   // Aggregate photos into sectors
   const sectorCounts: Record<string, number> = {
     front: 0,
-    'front-right': 0,
+    "front-right": 0,
     right: 0,
-    'back-right': 0,
+    "back-right": 0,
     back: 0,
-    'back-left': 0,
+    "back-left": 0,
     left: 0,
-    'front-left': 0,
+    "front-left": 0,
     upper: 0,
     lower: 0,
   };
 
   for (const p of photos) {
-    const az = (p.azimuth % 360 + 360) % 360;
+    const az = ((p.azimuth % 360) + 360) % 360;
     const el = p.elevation ?? 20;
 
     if (el >= 35) {
-      sectorCounts.upper = (sectorCounts.upper ?? 0) + 1;
+      sectorCounts["upper"] = (sectorCounts["upper"] ?? 0) + 1;
     } else {
-      sectorCounts.lower = (sectorCounts.lower ?? 0) + 1;
+      sectorCounts["lower"] = (sectorCounts["lower"] ?? 0) + 1;
     }
 
-    if (az >= 337.5 || az < 22.5) sectorCounts.front = (sectorCounts.front ?? 0) + 1;
-    else if (az >= 22.5 && az < 67.5) sectorCounts['front-right'] = (sectorCounts['front-right'] ?? 0) + 1;
-    else if (az >= 67.5 && az < 112.5) sectorCounts.right = (sectorCounts.right ?? 0) + 1;
-    else if (az >= 112.5 && az < 157.5) sectorCounts['back-right'] = (sectorCounts['back-right'] ?? 0) + 1;
-    else if (az >= 157.5 && az < 202.5) sectorCounts.back = (sectorCounts.back ?? 0) + 1;
-    else if (az >= 202.5 && az < 247.5) sectorCounts['back-left'] = (sectorCounts['back-left'] ?? 0) + 1;
-    else if (az >= 247.5 && az < 292.5) sectorCounts.left = (sectorCounts.left ?? 0) + 1;
-    else if (az >= 292.5 && az < 337.5) sectorCounts['front-left'] = (sectorCounts['front-left'] ?? 0) + 1;
+    if (az >= 337.5 || az < 22.5) sectorCounts["front"] = (sectorCounts["front"] ?? 0) + 1;
+    else if (az >= 22.5 && az < 67.5)
+      sectorCounts["front-right"] = (sectorCounts["front-right"] ?? 0) + 1;
+    else if (az >= 67.5 && az < 112.5) sectorCounts["right"] = (sectorCounts["right"] ?? 0) + 1;
+    else if (az >= 112.5 && az < 157.5)
+      sectorCounts["back-right"] = (sectorCounts["back-right"] ?? 0) + 1;
+    else if (az >= 157.5 && az < 202.5) sectorCounts["back"] = (sectorCounts["back"] ?? 0) + 1;
+    else if (az >= 202.5 && az < 247.5)
+      sectorCounts["back-left"] = (sectorCounts["back-left"] ?? 0) + 1;
+    else if (az >= 247.5 && az < 292.5) sectorCounts["left"] = (sectorCounts["left"] ?? 0) + 1;
+    else if (az >= 292.5 && az < 337.5)
+      sectorCounts["front-left"] = (sectorCounts["front-left"] ?? 0) + 1;
   }
 
   // Calculate sector states
@@ -87,17 +91,17 @@ export function SectorCoverageRadar({
 
   const sectors: SectorState[] = SECTOR_DEFINITIONS.map((def) => {
     const count = sectorCounts[def.id] ?? 0;
-    let status: 'gray' | 'purple' | 'green' | 'orange' = 'gray';
+    let status: "gray" | "purple" | "green" | "orange" = "gray";
 
     if (count === 0) {
-      status = 'gray';
+      status = "gray";
       missingSectorsList.push(def.label);
     } else if (count === 1) {
       // 1 frame is captured but needs more for solid triangulation
-      status = currentPass > 1 ? 'orange' : 'purple';
+      status = currentPass > 1 ? "orange" : "purple";
       partialSectors++;
     } else {
-      status = 'green';
+      status = "green";
       sufficientSectors++;
     }
 
@@ -111,9 +115,9 @@ export function SectorCoverageRadar({
     };
   });
 
-  const upperCount = sectorCounts.upper ?? 0;
+  const upperCount = sectorCounts["upper"] ?? 0;
   if (upperCount === 0) {
-    missingSectorsList.push('Upper views');
+    missingSectorsList.push("Upper views");
   }
 
   // Coverage percentage based on azimuth & elevation
@@ -124,13 +128,13 @@ export function SectorCoverageRadar({
   // Determine current pass label
   const passLabel =
     currentPass === 1
-      ? 'Pass 1 · Eye-Level'
+      ? "Pass 1 · Eye-Level"
       : currentPass === 2
-        ? 'Pass 2 · Upper 45°'
-        : 'Pass 3 · Missing Detail';
+        ? "Pass 2 · Upper 45°"
+        : "Pass 3 · Missing Detail";
 
   // SVG dimensions
-  const size = mode === 'floating' ? 140 : 180;
+  const size = mode === "floating" ? 140 : 180;
   const cx = size / 2;
   const cy = size / 2;
   const outerR = size * 0.44;
@@ -138,20 +142,20 @@ export function SectorCoverageRadar({
 
   // Tracking color
   const trackingBadge =
-    trackingStatus === 'optimal'
-      ? { text: 'TRACKING', color: 'bg-emerald-500/90 text-white' }
-      : trackingStatus === 'limited'
-        ? { text: 'LIMITED', color: 'bg-amber-500/90 text-amber-950' }
-        : trackingStatus === 'lost'
-          ? { text: 'TRACKING LOST', color: 'bg-red-500/90 text-white' }
-          : { text: 'READY', color: 'bg-neutral-800 text-white/80' };
+    trackingStatus === "optimal"
+      ? { text: "TRACKING", color: "bg-emerald-500/90 text-white" }
+      : trackingStatus === "limited"
+        ? { text: "LIMITED", color: "bg-amber-500/90 text-amber-950" }
+        : trackingStatus === "lost"
+          ? { text: "TRACKING LOST", color: "bg-red-500/90 text-white" }
+          : { text: "READY", color: "bg-neutral-800 text-white/80" };
 
   return (
     <div
       className={`rounded-2xl border transition-all select-none ${
-        mode === 'floating'
-          ? 'bg-black/80 backdrop-blur-xl border-white/10 p-3 shadow-2xl text-white'
-          : 'bg-card border-border/60 p-4 text-foreground'
+        mode === "floating"
+          ? "bg-black/80 backdrop-blur-xl border-white/10 p-3 shadow-2xl text-white"
+          : "bg-card border-border/60 p-4 text-foreground"
       }`}
     >
       {/* Header bar with coverage percentage and tracking status */}
@@ -159,13 +163,13 @@ export function SectorCoverageRadar({
         <div className="flex items-center gap-1.5">
           <span
             className={`w-2 h-2 rounded-full ${
-              trackingStatus === 'optimal'
-                ? 'bg-emerald-400 animate-pulse'
-                : trackingStatus === 'limited'
-                  ? 'bg-amber-400'
-                  : trackingStatus === 'lost'
-                    ? 'bg-red-500 animate-ping'
-                    : 'bg-muted'
+              trackingStatus === "optimal"
+                ? "bg-emerald-400 animate-pulse"
+                : trackingStatus === "limited"
+                  ? "bg-amber-400"
+                  : trackingStatus === "lost"
+                    ? "bg-red-500 animate-ping"
+                    : "bg-muted"
             }`}
           />
           <span className="text-[11px] font-bold font-mono tracking-wide">
@@ -182,7 +186,12 @@ export function SectorCoverageRadar({
 
       {/* Main Radar SVG with 8 directional wedges and central elevation dome */}
       <div className="relative flex justify-center my-1">
-        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} className="overflow-visible">
+        <svg
+          width={size}
+          height={size}
+          viewBox={`0 0 ${size} ${size}`}
+          className="overflow-visible"
+        >
           <defs>
             <radialGradient id="radarCenterGlow" cx="50%" cy="50%" r="50%">
               <stop offset="0%" stopColor="#9333ea" stopOpacity="0.3" />
@@ -191,7 +200,14 @@ export function SectorCoverageRadar({
           </defs>
 
           {/* Background circle */}
-          <circle cx={cx} cy={cy} r={outerR} fill="rgba(255,255,255,0.03)" stroke="rgba(255,255,255,0.12)" strokeWidth="1" />
+          <circle
+            cx={cx}
+            cy={cy}
+            r={outerR}
+            fill="rgba(255,255,255,0.03)"
+            stroke="rgba(255,255,255,0.12)"
+            strokeWidth="1"
+          />
 
           {/* 8 Angular Sectors */}
           {sectors.map((sec, i) => {
@@ -212,22 +228,22 @@ export function SectorCoverageRadar({
 
             // Sector Color: Gray, Purple, Green, Orange
             const fillColor =
-              sec.status === 'green'
-                ? 'rgba(16, 185, 129, 0.75)' // Green = sufficient
-                : sec.status === 'purple'
-                  ? 'rgba(147, 51, 234, 0.75)' // Purple = captured, needs more
-                  : sec.status === 'orange'
-                    ? 'rgba(245, 158, 11, 0.85)' // Orange = additional recommended
-                    : 'rgba(75, 85, 99, 0.25)'; // Gray = not captured
+              sec.status === "green"
+                ? "rgba(16, 185, 129, 0.75)" // Green = sufficient
+                : sec.status === "purple"
+                  ? "rgba(147, 51, 234, 0.75)" // Purple = captured, needs more
+                  : sec.status === "orange"
+                    ? "rgba(245, 158, 11, 0.85)" // Orange = additional recommended
+                    : "rgba(75, 85, 99, 0.25)"; // Gray = not captured
 
             const strokeColor =
-              sec.status === 'green'
-                ? '#10b981'
-                : sec.status === 'purple'
-                  ? '#a855f7'
-                  : sec.status === 'orange'
-                    ? '#f59e0b'
-                    : 'rgba(255, 255, 255, 0.1)';
+              sec.status === "green"
+                ? "#10b981"
+                : sec.status === "purple"
+                  ? "#a855f7"
+                  : sec.status === "orange"
+                    ? "#f59e0b"
+                    : "rgba(255, 255, 255, 0.1)";
 
             return (
               <path
@@ -249,12 +265,14 @@ export function SectorCoverageRadar({
             r={innerR}
             fill={
               upperCount >= 4
-                ? 'rgba(16, 185, 129, 0.8)'
+                ? "rgba(16, 185, 129, 0.8)"
                 : upperCount >= 1
-                  ? 'rgba(147, 51, 234, 0.7)'
-                  : 'rgba(75, 85, 99, 0.3)'
+                  ? "rgba(147, 51, 234, 0.7)"
+                  : "rgba(75, 85, 99, 0.3)"
             }
-            stroke={upperCount >= 4 ? '#10b981' : upperCount >= 1 ? '#a855f7' : 'rgba(255,255,255,0.15)'}
+            stroke={
+              upperCount >= 4 ? "#10b981" : upperCount >= 1 ? "#a855f7" : "rgba(255,255,255,0.15)"
+            }
             strokeWidth="1.5"
           />
 
@@ -291,10 +309,46 @@ export function SectorCoverageRadar({
           })()}
 
           {/* Cardinal Directions */}
-          <text x={cx} y={cy - outerR - 4} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.6)" fontWeight="bold">F</text>
-          <text x={cx + outerR + 6} y={cy + 3} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.6)" fontWeight="bold">R</text>
-          <text x={cx} y={cy + outerR + 10} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.6)" fontWeight="bold">B</text>
-          <text x={cx - outerR - 6} y={cy + 3} textAnchor="middle" fontSize="8" fill="rgba(255,255,255,0.6)" fontWeight="bold">L</text>
+          <text
+            x={cx}
+            y={cy - outerR - 4}
+            textAnchor="middle"
+            fontSize="8"
+            fill="rgba(255,255,255,0.6)"
+            fontWeight="bold"
+          >
+            F
+          </text>
+          <text
+            x={cx + outerR + 6}
+            y={cy + 3}
+            textAnchor="middle"
+            fontSize="8"
+            fill="rgba(255,255,255,0.6)"
+            fontWeight="bold"
+          >
+            R
+          </text>
+          <text
+            x={cx}
+            y={cy + outerR + 10}
+            textAnchor="middle"
+            fontSize="8"
+            fill="rgba(255,255,255,0.6)"
+            fontWeight="bold"
+          >
+            B
+          </text>
+          <text
+            x={cx - outerR - 6}
+            y={cy + 3}
+            textAnchor="middle"
+            fontSize="8"
+            fill="rgba(255,255,255,0.6)"
+            fontWeight="bold"
+          >
+            L
+          </text>
         </svg>
       </div>
 
@@ -302,7 +356,9 @@ export function SectorCoverageRadar({
       <div className="space-y-1.5 mt-2 text-[10px]">
         <div className="flex items-center justify-between text-muted-foreground">
           <span className="font-semibold text-foreground/90">{passLabel}</span>
-          <span className="font-mono">{photos.length} selected ({rejectedCount} rejected)</span>
+          <span className="font-mono">
+            {photos.length} selected ({rejectedCount} rejected)
+          </span>
         </div>
 
         {/* Legend: Gray, Purple, Green, Orange */}
@@ -328,7 +384,7 @@ export function SectorCoverageRadar({
         {/* Next recommended movement guidance */}
         {missingSectorsList.length > 0 && (
           <div className="text-[10px] text-amber-300/90 font-medium pt-1">
-            Tip: Rotate to cover {missingSectorsList.slice(0, 2).join(' & ')}
+            Tip: Rotate to cover {missingSectorsList.slice(0, 2).join(" & ")}
           </div>
         )}
       </div>

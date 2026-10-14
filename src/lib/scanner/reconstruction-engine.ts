@@ -1,30 +1,31 @@
-import * as THREE from 'three';
-import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
+import * as THREE from "three";
+import { GLTFExporter } from "three/examples/jsm/exporters/GLTFExporter.js";
 import type {
   ScanPhoto,
   QualityPreset,
   ReconstructionStageInfo,
   ModelCleanupOptions,
   QualityReport,
-} from './types';
-import { segmentForeground } from './background-segmenter';
-import { marchCubes, type VoxelGrid } from './marching-cubes';
-import { optimizeMesh } from './mesh-optimizer';
+} from "./types";
+import { segmentForeground } from "./background-segmenter";
+import { marchCubes, type VoxelGrid } from "./marching-cubes";
+import { optimizeMesh } from "./mesh-optimizer";
 import {
   estimateMultiViewCameraPoses,
   type EstimatedCameraPose,
   type PoseEstimationSummary,
-} from './pose-estimator';
-import { type SparsePointCloud } from './sparse-point-cloud';
-import { cleanReconstructedMesh, type MeshCleanerReport } from './mesh-cleaner';
-import { mapMultiViewTextures } from './texture-mapper';
-import { generateQualityReport } from './quality-report';
-import { blobToDataUrl } from '@/lib/ar/projects';
+} from "./pose-estimator";
+import { type SparsePointCloud } from "./sparse-point-cloud";
+import { cleanReconstructedMesh, type MeshCleanerReport } from "./mesh-cleaner";
+import { mapMultiViewTextures } from "./texture-mapper";
+import { generateQualityReport } from "./quality-report";
+import { blobToDataUrl } from "@/lib/ar/projects";
 
 export interface ReconstructionOptions {
   preset?: QualityPreset;
   cleanupOptions?: ModelCleanupOptions;
-  retryStrategy?: 'filter-blurry' | 'relax-features' | 'conservative-carving' | 'recompute-textures';
+  retryStrategy?:
+    "filter-blurry" | "relax-features" | "conservative-carving" | "recompute-textures";
 }
 
 export interface DiagnosticPhotoItem {
@@ -43,7 +44,7 @@ export interface DiagnosticPhotoItem {
 export interface DiagnosticStageMetric {
   stage: string;
   stageIndex: number;
-  status: 'pass' | 'warning' | 'fail';
+  status: "pass" | "warning" | "fail";
   metricName: string;
   metricValue: string | number;
   details: string;
@@ -115,10 +116,10 @@ export interface ReconstructionResult {
  */
 export async function reconstruct3DModel(
   photos: ScanPhoto[],
-  preset: QualityPreset = 'standard',
+  preset: QualityPreset = "standard",
   cleanupOptions: ModelCleanupOptions = {
     center: true,
-    origin: 'bottom',
+    origin: "bottom",
     scale: 1.0,
     rotationX: 0,
     rotationY: 0,
@@ -127,26 +128,25 @@ export async function reconstruct3DModel(
     decimationRatio: 1.0,
   },
   onProgress?: (info: ReconstructionStageInfo) => void,
-  retryStrategy?: 'filter-blurry' | 'relax-features' | 'conservative-carving' | 'recompute-textures'
+  retryStrategy?:
+    "filter-blurry" | "relax-features" | "conservative-carving" | "recompute-textures",
 ): Promise<ReconstructionResult> {
   const startTime = performance.now();
 
   if (photos.length < 3) {
-    throw new Error(
-      'At least 3 photos from multiple angles are required for 3D reconstruction.'
-    );
+    throw new Error("At least 3 photos from multiple angles are required for 3D reconstruction.");
   }
 
   // --- STAGE 1: PHOTO VALIDATION & RETRY FILTERING ---
   onProgress?.({
-    stage: 'validating',
+    stage: "validating",
     progress: 5,
     message: `Validating ${photos.length} captured photographs…`,
   });
   await yieldFrame();
 
   let usablePhotos = photos;
-  if (retryStrategy === 'filter-blurry') {
+  if (retryStrategy === "filter-blurry") {
     usablePhotos = photos.filter((p) => !p.quality.isBlurry && p.quality.overallScore >= 35);
   } else {
     usablePhotos = photos.filter((p) => p.quality.overallScore >= 10);
@@ -158,9 +158,9 @@ export async function reconstruct3DModel(
 
   // --- STAGE 2: SEGMENTATION & SILHOUETTE PRESERVATION ---
   onProgress?.({
-    stage: 'segmenting',
+    stage: "segmenting",
     progress: 15,
-    message: 'Extracting foreground silhouettes & preserving dark object edges…',
+    message: "Extracting foreground silhouettes & preserving dark object edges…",
   });
   await yieldFrame();
 
@@ -182,7 +182,7 @@ export async function reconstruct3DModel(
 
     const pct = Math.round(15 + (i / usablePhotos.length) * 15);
     onProgress?.({
-      stage: 'segmenting',
+      stage: "segmenting",
       progress: pct,
       message: `Segmenting photograph ${i + 1} of ${usablePhotos.length}…`,
     });
@@ -191,9 +191,9 @@ export async function reconstruct3DModel(
 
   // --- STAGE 3: OPTICAL FEATURE TRACKING & CAMERA POSE ESTIMATION ---
   onProgress?.({
-    stage: 'pose-estimation',
+    stage: "pose-estimation",
     progress: 32,
-    message: 'Solving 360° camera trajectory and optical epipolar correspondences…',
+    message: "Solving 360° camera trajectory and optical epipolar correspondences…",
   });
   await yieldFrame();
 
@@ -201,20 +201,20 @@ export async function reconstruct3DModel(
     segmentedPhotos,
     (msg, subPct) => {
       onProgress?.({
-        stage: 'pose-estimation',
+        stage: "pose-estimation",
         progress: 32 + Math.round(subPct * 0.16),
         message: msg,
       });
-    }
+    },
   );
 
   const registeredPoses = poseSummary.poses.filter((p) => p.isRegistered);
   const activePoses = registeredPoses.length >= 3 ? registeredPoses : poseSummary.poses;
 
   // --- STAGE 4: VOLUMETRIC SPACE-CARVING (ADAPTIVE DENSE VOLUME) ---
-  const voxelRes = preset === 'draft' ? 44 : preset === 'standard' ? 62 : 78;
+  const voxelRes = preset === "draft" ? 44 : preset === "standard" ? 62 : 78;
   onProgress?.({
-    stage: 'geometry-carving',
+    stage: "geometry-carving",
     progress: 50,
     message: `Reconstructing dense volume (${voxelRes}³ voxels) with photometric stereo…`,
     stats: {
@@ -233,52 +233,52 @@ export async function reconstruct3DModel(
     activePoses,
     voxelRes,
     poseSummary.sparsePointCloud,
-    retryStrategy
+    retryStrategy,
   );
 
   // --- STAGE 5: MARCHING CUBES ISOSURFACE EXTRACTION ---
   onProgress?.({
-    stage: 'marching-cubes',
+    stage: "marching-cubes",
     progress: 66,
-    message: 'Extracting 3D manifold surface via Marching Cubes…',
+    message: "Extracting 3D manifold surface via Marching Cubes…",
   });
   await yieldFrame();
 
   const rawGeometry = marchCubes(voxelGrid, 0.0);
   rawGeometry.computeVertexNormals();
-  const rawPos = rawGeometry.getAttribute('position');
+  const rawPos = rawGeometry.getAttribute("position");
   const rawVertexCount = rawPos ? rawPos.count : 0;
 
   // --- STAGE 6: SPIKE ARTIFACT & DEBRIS ISLAND REMOVAL ---
   onProgress?.({
-    stage: 'cleanup',
+    stage: "cleanup",
     progress: 74,
-    message: 'Filtering needle spike triangles and pruning isolated debris…',
+    message: "Filtering needle spike triangles and pruning isolated debris…",
   });
   await yieldFrame();
 
   const { geometry: cleanGeometry, report: meshCleanerReport } =
     cleanReconstructedMesh(rawGeometry);
 
-  const cleanPos = cleanGeometry.getAttribute('position');
+  const cleanPos = cleanGeometry.getAttribute("position");
   const cleanedVertexCount = cleanPos ? cleanPos.count : 0;
 
   if (cleanedVertexCount < 300) {
     cleanGeometry.dispose();
     throw new Error(
-      'Reconstruction produced an empty or degenerate model. Re-capture with the object centered, evenly lit, on a plain background, moving in a steady circle.'
+      "Reconstruction produced an empty or degenerate model. Re-capture with the object centered, evenly lit, on a plain background, moving in a steady circle.",
     );
   }
 
   // --- STAGE 7: MULTI-VIEW TEXTURE MAPPING ---
   onProgress?.({
-    stage: 'texturing',
+    stage: "texturing",
     progress: 82,
-    message: 'Baking high-contrast photographs with cosine seam blending…',
+    message: "Baking high-contrast photographs with cosine seam blending…",
   });
   await yieldFrame();
 
-  const texSize = preset === 'high' ? 2048 : 1024;
+  const texSize = preset === "high" ? 2048 : 1024;
   const textureResult = mapMultiViewTextures(cleanGeometry, activePoses, {
     textureSize: texSize,
     blendSeams: true,
@@ -287,9 +287,9 @@ export async function reconstruct3DModel(
 
   // --- STAGE 8: MESH OPTIMIZATION & TRANSFORMS ---
   onProgress?.({
-    stage: 'optimizing',
+    stage: "optimizing",
     progress: 89,
-    message: 'Centering geometry and aligning bounding origin…',
+    message: "Centering geometry and aligning bounding origin…",
   });
   await yieldFrame();
 
@@ -297,9 +297,9 @@ export async function reconstruct3DModel(
 
   // --- STAGE 9: GLB EXPORT & INTEGRITY VALIDATION ---
   onProgress?.({
-    stage: 'exporting',
+    stage: "exporting",
     progress: 94,
-    message: 'Compiling glTF 2.0 PBR container and validating binary header…',
+    message: "Compiling glTF 2.0 PBR container and validating binary header…",
   });
   await yieldFrame();
 
@@ -315,7 +315,7 @@ export async function reconstruct3DModel(
   });
 
   const mesh = new THREE.Mesh(optimizedGeometry, material);
-  mesh.name = 'ScannedObject';
+  mesh.name = "ScannedObject";
 
   const scene = new THREE.Scene();
   scene.add(mesh);
@@ -326,7 +326,7 @@ export async function reconstruct3DModel(
   });
 
   if (!(glbBuffer instanceof ArrayBuffer)) {
-    throw new Error('GLTFExporter failed to generate binary GLB.');
+    throw new Error("GLTFExporter failed to generate binary GLB.");
   }
 
   // Validate GLB Magic Header (0x46546C67 -> "glTF" in ASCII)
@@ -335,18 +335,16 @@ export async function reconstruct3DModel(
   const isGlbValid = magic === 0x46546c67;
 
   if (!isGlbValid) {
-    throw new Error('GLB validation failed: Invalid glTF binary magic header.');
+    throw new Error("GLB validation failed: Invalid glTF binary magic header.");
   }
 
-  const glbBlob = new Blob([glbBuffer], { type: 'model/gltf-binary' });
+  const glbBlob = new Blob([glbBuffer], { type: "model/gltf-binary" });
   const glbDataUrl = await blobToDataUrl(glbBlob);
 
-  const posAttr = optimizedGeometry.getAttribute('position');
+  const posAttr = optimizedGeometry.getAttribute("position");
   const vertexCount = posAttr ? posAttr.count : 0;
   const triangleCount = Math.floor(vertexCount / 3);
-  const elapsedSeconds = Number(
-    ((performance.now() - startTime) / 1000).toFixed(1)
-  );
+  const elapsedSeconds = Number(((performance.now() - startTime) / 1000).toFixed(1));
 
   // Calculate angle coverage score across 360 azimuth & elevation
   const azimuthBins = new Set<number>();
@@ -383,86 +381,104 @@ export async function reconstruct3DModel(
 
   const stageMetrics: DiagnosticStageMetric[] = [
     {
-      stage: '1. Photographs',
+      stage: "1. Photographs",
       stageIndex: 1,
-      status: photos.length >= 12 ? 'pass' : photos.length >= 3 ? 'warning' : 'fail',
-      metricName: 'Total Photographs',
+      status: photos.length >= 12 ? "pass" : photos.length >= 3 ? "warning" : "fail",
+      metricName: "Total Photographs",
       metricValue: `${photos.length} photos`,
-      details: photos.length >= 30 ? 'Comprehensive multi-view coverage available.' : 'Minimum coverage met, 30+ recommended for complete 360° fidelity.',
+      details:
+        photos.length >= 30
+          ? "Comprehensive multi-view coverage available."
+          : "Minimum coverage met, 30+ recommended for complete 360° fidelity.",
     },
     {
-      stage: '2. Foreground Masks',
+      stage: "2. Foreground Masks",
       stageIndex: 2,
-      status: 'pass',
-      metricName: 'Dark Surface & Texture Preservation',
-      metricValue: 'Sobel Gradient Guided',
-      details: 'Gradient magnitude preserves dark fabric textures and zipper details without boundary clipping.',
+      status: "pass",
+      metricName: "Dark Surface & Texture Preservation",
+      metricValue: "Sobel Gradient Guided",
+      details:
+        "Gradient magnitude preserves dark fabric textures and zipper details without boundary clipping.",
     },
     {
-      stage: '3. Camera Poses',
+      stage: "3. Camera Poses",
       stageIndex: 3,
-      status: poseSummary.registrationRate >= 75 ? 'pass' : poseSummary.registrationRate >= 50 ? 'warning' : 'fail',
-      metricName: 'Camera Registration Rate',
+      status:
+        poseSummary.registrationRate >= 75
+          ? "pass"
+          : poseSummary.registrationRate >= 50
+            ? "warning"
+            : "fail",
+      metricName: "Camera Registration Rate",
       metricValue: `${poseSummary.registrationRate}% (${activePoses.length}/${photos.length})`,
       details: `Mean reprojection error: ${poseSummary.meanReprojectionError}px. Epipolar geometric verification applied.`,
     },
     {
-      stage: '4. Sparse Point Cloud',
+      stage: "4. Sparse Point Cloud",
       stageIndex: 4,
-      status: poseSummary.totalSparsePoints >= 80 ? 'pass' : poseSummary.totalSparsePoints >= 20 ? 'warning' : 'fail',
-      metricName: 'Triangulated 3D Points',
+      status:
+        poseSummary.totalSparsePoints >= 80
+          ? "pass"
+          : poseSummary.totalSparsePoints >= 20
+            ? "warning"
+            : "fail",
+      metricName: "Triangulated 3D Points",
       metricValue: `${poseSummary.totalSparsePoints} points`,
       details: `Mean ray triangulation error: ${poseSummary.sparsePointCloud.meanError.toFixed(2)}px. Statistical outlier filtered.`,
     },
     {
-      stage: '5. Dense Reconstruction',
+      stage: "5. Dense Reconstruction",
       stageIndex: 5,
-      status: occupiedVoxelCount >= 200 ? 'pass' : 'fail',
-      metricName: 'Space Carving Consensus',
+      status: occupiedVoxelCount >= 200 ? "pass" : "fail",
+      metricName: "Space Carving Consensus",
       metricValue: `${occupiedVoxelCount.toLocaleString()} voxels`,
       details: `Grid resolution: ${voxelRes}³. Adaptive consensus threshold preserved rounded silhouettes.`,
     },
     {
-      stage: '6. Raw Mesh Extraction',
+      stage: "6. Raw Mesh Extraction",
       stageIndex: 6,
-      status: rawVertexCount >= 300 ? 'pass' : 'fail',
-      metricName: 'Marching Cubes Surface',
+      status: rawVertexCount >= 300 ? "pass" : "fail",
+      metricName: "Marching Cubes Surface",
       metricValue: `${rawTriangleCount.toLocaleString()} triangles`,
       details: `Raw extracted manifold geometry before outlier pruning.`,
     },
     {
-      stage: '7. Cleaned Mesh',
+      stage: "7. Cleaned Mesh",
       stageIndex: 7,
-      status: 'pass',
-      metricName: 'Needle Spikes Removed',
+      status: "pass",
+      metricName: "Needle Spikes Removed",
       metricValue: `${meshCleanerReport.spikeTrianglesRemoved} spikes removed`,
       details: `Culled ${meshCleanerReport.degenerateFacesRemoved} degenerate faces and ${meshCleanerReport.debrisIslandsRemoved} detached shards. Real seams preserved.`,
     },
     {
-      stage: '8. Textured Mesh',
+      stage: "8. Textured Mesh",
       stageIndex: 8,
-      status: 'pass',
-      metricName: 'Multi-View UV Atlas',
+      status: "pass",
+      metricName: "Multi-View UV Atlas",
       metricValue: `${texSize}×${texSize} px`,
       details: `Visibility raycast photographic projection with cosine seam blending.`,
     },
     {
-      stage: '9. Exported GLB',
+      stage: "9. Exported GLB",
       stageIndex: 9,
-      status: isGlbValid ? 'pass' : 'fail',
-      metricName: 'glTF 2.0 Binary Validation',
+      status: isGlbValid ? "pass" : "fail",
+      metricName: "glTF 2.0 Binary Validation",
       metricValue: `${(glbBlob.size / 1024).toFixed(1)} KB`,
       details: `Verified magic header (0x46546C67), standard buffer views, and PBR material.`,
     },
   ];
 
-  const firstFailing = stageMetrics.find((m) => m.status === 'fail');
-  const firstWarning = stageMetrics.find((m) => m.status === 'warning');
-  const earliestFailureStage = firstFailing ? firstFailing.stage : (firstWarning ? firstWarning.stage : null);
+  const firstFailing = stageMetrics.find((m) => m.status === "fail");
+  const firstWarning = stageMetrics.find((m) => m.status === "warning");
+  const earliestFailureStage = firstFailing
+    ? firstFailing.stage
+    : firstWarning
+      ? firstWarning.stage
+      : null;
 
-  let textureDataUrl = '';
+  let textureDataUrl = "";
   try {
-    textureDataUrl = textureResult.textureCanvas.toDataURL('image/jpeg', 0.8);
+    textureDataUrl = textureResult.textureCanvas.toDataURL("image/jpeg", 0.8);
   } catch (e) {
     // Canvas data export fallback
   }
@@ -526,9 +542,9 @@ export async function reconstruct3DModel(
   };
 
   onProgress?.({
-    stage: 'complete',
+    stage: "complete",
     progress: 100,
-    message: '3D object reconstruction complete!',
+    message: "3D object reconstruction complete!",
     stats: {
       totalPhotos: photos.length,
       usedPhotos: activePoses.length,
@@ -566,7 +582,7 @@ function carveDensePhotometricGrid(
   cameraPoses: EstimatedCameraPose[],
   resolution: number,
   sparsePointCloud?: SparsePointCloud,
-  retryStrategy?: string
+  retryStrategy?: string,
 ): VoxelGrid {
   const nx = resolution;
   const ny = resolution;
@@ -600,10 +616,10 @@ function carveDensePhotometricGrid(
     const mh = p.maskCanvas.height;
     const maskData = p.maskContext.getImageData(0, 0, mw, mh).data;
 
-    const imgC = document.createElement('canvas');
+    const imgC = document.createElement("canvas");
     imgC.width = 160;
     imgC.height = Math.round((p.imageElement.height / p.imageElement.width) * 160);
-    const imgCtx = imgC.getContext('2d', { willReadFrequently: true })!;
+    const imgCtx = imgC.getContext("2d", { willReadFrequently: true })!;
     imgCtx.drawImage(p.imageElement, 0, 0, imgC.width, imgC.height);
     const imgData = imgCtx.getImageData(0, 0, imgC.width, imgC.height).data;
 
@@ -623,8 +639,7 @@ function carveDensePhotometricGrid(
 
   // Strict consensus threshold:
   // Requires >= 76% consensus among viewing cameras to prevent empty space bridging
-  const consensusThreshold =
-    retryStrategy === 'conservative-carving' ? 0.70 : 0.76;
+  const consensusThreshold = retryStrategy === "conservative-carving" ? 0.7 : 0.76;
 
   for (let z = 0; z < nz; z++) {
     const vz = minZ + z * cellSize;
@@ -682,8 +697,7 @@ function carveDensePhotometricGrid(
           }
         }
 
-        const occupancyFraction =
-          evaluatedCount > 0 ? insideCount / evaluatedCount : 0;
+        const occupancyFraction = evaluatedCount > 0 ? insideCount / evaluatedCount : 0;
         const index = z * nx * ny + y * nx + x;
 
         let colorVariance = 0;

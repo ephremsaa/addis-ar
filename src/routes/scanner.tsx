@@ -1,25 +1,25 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useEffect, useState } from 'react';
-import { ScannerWorkspace } from '@/components/scanner/ScannerWorkspace';
-import { listProjects, type Project } from '@/lib/ar/projects';
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { ScannerWorkspace } from "@/components/scanner/ScannerWorkspace";
+import { listProjects, type Project } from "@/lib/ar/projects";
 
-export const Route = createFileRoute('/scanner')({
+export const Route = createFileRoute("/scanner")({
   ssr: false,
   head: () => ({
     meta: [
-      { title: '3D Object Scanner · Addis AR' },
+      { title: "3D Object Scanner · Addis AR" },
       {
-        name: 'description',
+        name: "description",
         content:
-          'Scan real-world objects with your phone camera, remove backgrounds, reconstruct 3D shapes and export genuine GLB models with Addis AR.',
+          "Scan real-world objects with your phone camera, remove backgrounds, reconstruct 3D shapes and export genuine GLB models with Addis AR.",
       },
-      { property: 'og:title', content: '3D Object Scanner · Addis AR' },
+      { property: "og:title", content: "3D Object Scanner · Addis AR" },
       {
-        property: 'og:description',
-        content: 'Mobile camera to 3D model generator for Addis AR.',
+        property: "og:description",
+        content: "Mobile camera to 3D model generator for Addis AR.",
       },
-      { property: 'og:type', content: 'website' },
-      { name: 'twitter:card', content: 'summary_large_image' },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
     ],
   }),
   component: ScannerPage,
@@ -38,16 +38,11 @@ function ScannerPage() {
           setProject(list[0]);
         }
       } catch (err) {
-        console.warn('Could not load latest project for scanner:', err);
+        console.warn("Could not load latest project for scanner:", err);
       }
     }
     load();
   }, []);
 
-  return (
-    <ScannerWorkspace
-      targetProject={project}
-      onClose={() => navigate({ to: '/' })}
-    />
-  );
+  return <ScannerWorkspace targetProject={project} onClose={() => navigate({ to: "/" })} />;
 }

@@ -1,10 +1,10 @@
-import * as THREE from 'three';
-import { MarkerDetector, type DetectedMarker } from './vision/marker-detector';
-import { TargetAnalyzer, type TargetTrackResult } from './vision/target-analyzer';
-import type { LockedTargetData } from './target-manager';
-import type { TrackingMode } from './projects';
+import * as THREE from "three";
+import { MarkerDetector, type DetectedMarker } from "./vision/marker-detector";
+import { TargetAnalyzer, type TargetTrackResult } from "./vision/target-analyzer";
+import type { LockedTargetData } from "./target-manager";
+import type { TrackingMode } from "./projects";
 
-export type TrackingState = 'reliable' | 'uncertain' | 'lost';
+export type TrackingState = "reliable" | "uncertain" | "lost";
 
 export interface TrackingPose {
   position: [number, number, number];
@@ -21,14 +21,14 @@ export interface TrackingReport {
   targetBounds: { x: number; y: number; width: number; height: number } | null;
   statusText: string;
   isWebXRActive: boolean;
-  detectedMarkerId?: number;
+  detectedMarkerId?: number | undefined;
 }
 
 export type TrackingEventCallback = (report: TrackingReport) => void;
 
 export class TrackingManager {
-  private mode: TrackingMode = 'focus-target';
-  private state: TrackingState = 'lost';
+  private mode: TrackingMode = "focus-target";
+  private state: TrackingState = "lost";
   private confidence = 0;
   private smoothingFactor = 0.4; // 0 (heavy smoothing) to 1 (raw instantaneous)
   private confidenceThreshold = 0.4;
@@ -40,8 +40,8 @@ export class TrackingManager {
   private targetQuaternion = new THREE.Quaternion();
 
   private targetBounds: { x: number; y: number; width: number; height: number } | null = null;
-  private statusText = 'Camera AR ready. Point at target and tap Scan Target.';
-  private detectedMarkerId?: number;
+  private statusText = "Camera AR ready. Point at target and tap Scan Target.";
+  private detectedMarkerId?: number | undefined;
 
   // WebXR session states
   private xrSession: XRSession | null = null;
@@ -51,7 +51,7 @@ export class TrackingManager {
 
   // Device orientation state
   private hasDeviceOrientation = false;
-  private deviceEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+  private deviceEuler = new THREE.Euler(0, 0, 0, "YXZ");
 
   private listeners: Set<TrackingEventCallback> = new Set();
 
@@ -61,9 +61,9 @@ export class TrackingManager {
   }
 
   private async checkWebXRSupport() {
-    if (typeof navigator !== 'undefined' && 'xr' in navigator && navigator.xr) {
+    if (typeof navigator !== "undefined" && "xr" in navigator && navigator.xr) {
       try {
-        this.isWebXRSupported = await navigator.xr.isSessionSupported('immersive-ar');
+        this.isWebXRSupported = await navigator.xr.isSessionSupported("immersive-ar");
       } catch {
         this.isWebXRSupported = false;
       }
@@ -71,7 +71,7 @@ export class TrackingManager {
   }
 
   private initDeviceOrientation() {
-    if (typeof window === 'undefined') return;
+    if (typeof window === "undefined") return;
     const handleOrientation = (e: DeviceOrientationEvent) => {
       if (e.beta === null || e.gamma === null) return;
       this.hasDeviceOrientation = true;
@@ -79,10 +79,10 @@ export class TrackingManager {
       const pitch = ((e.beta - 90) * Math.PI) / 180; // tilt
       const roll = (e.gamma * Math.PI) / 180;
       const yaw = ((e.alpha || 0) * Math.PI) / 180;
-      this.deviceEuler.set(pitch, -yaw, -roll, 'YXZ');
+      this.deviceEuler.set(pitch, -yaw, -roll, "YXZ");
     };
 
-    window.addEventListener('deviceorientation', handleOrientation, { passive: true });
+    window.addEventListener("deviceorientation", handleOrientation, { passive: true });
   }
 
   public subscribe(cb: TrackingEventCallback): () => void {
@@ -100,7 +100,7 @@ export class TrackingManager {
   public setMode(mode: TrackingMode) {
     this.mode = mode;
     this.targetBounds = null;
-    this.state = 'lost';
+    this.state = "lost";
     this.confidence = 0;
     this.statusText = `Switched to ${mode} mode.`;
     this.notify();
@@ -125,23 +125,20 @@ export class TrackingManager {
   /**
    * Processes a video frame and updates pose estimation according to active mode.
    */
-  public processFrame(
-    video: HTMLVideoElement | null,
-    lockedTarget: LockedTargetData | null
-  ): void {
+  public processFrame(video: HTMLVideoElement | null, lockedTarget: LockedTargetData | null): void {
     if (!video || !video.videoWidth) {
-      this.state = 'lost';
+      this.state = "lost";
       this.confidence = 0;
       return;
     }
 
-    if (this.mode === 'marker') {
+    if (this.mode === "marker") {
       this.processMarkerTracking(video);
-    } else if (this.mode === 'focus-target') {
+    } else if (this.mode === "focus-target") {
       this.processFocusTargetTracking(video, lockedTarget);
-    } else if (this.mode === 'device-orientation') {
+    } else if (this.mode === "device-orientation") {
       this.processDeviceOrientationTracking();
-    } else if (this.mode === 'webxr-plane') {
+    } else if (this.mode === "webxr-plane") {
       this.processWebXRTracking();
     }
 
@@ -155,8 +152,8 @@ export class TrackingManager {
    */
   private processMarkerTracking(video: HTMLVideoElement) {
     const markers = MarkerDetector.detectMarkers(video, 0.15);
-    if (markers.length > 0) {
-      const best = markers[0];
+    const best = markers[0];
+    if (best) {
       this.detectedMarkerId = best.id;
       this.confidence = best.confidence;
 
@@ -173,22 +170,22 @@ export class TrackingManager {
       this.targetBounds = { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
 
       if (this.confidence >= 0.7) {
-        this.state = 'reliable';
+        this.state = "reliable";
         this.statusText = `Marker #${best.id} tracked stably (${Math.round(this.confidence * 100)}%)`;
       } else {
-        this.state = 'uncertain';
+        this.state = "uncertain";
         this.statusText = `Marker #${best.id} tracking uncertain`;
       }
     } else {
       this.detectedMarkerId = undefined;
       this.confidence = Math.max(0, this.confidence - 0.15); // gentle decay
       if (this.confidence < this.confidenceThreshold) {
-        this.state = 'lost';
+        this.state = "lost";
         this.targetBounds = null;
-        this.statusText = 'Marker lost. Hold marker in view of camera.';
+        this.statusText = "Marker lost. Hold marker in view of camera.";
       } else {
-        this.state = 'uncertain';
-        this.statusText = 'Holding previous marker pose…';
+        this.state = "uncertain";
+        this.statusText = "Holding previous marker pose…";
       }
     }
   }
@@ -198,13 +195,13 @@ export class TrackingManager {
    */
   private processFocusTargetTracking(
     video: HTMLVideoElement,
-    lockedTarget: LockedTargetData | null
+    lockedTarget: LockedTargetData | null,
   ) {
     if (!lockedTarget) {
-      this.state = 'lost';
+      this.state = "lost";
       this.confidence = 0;
       this.targetBounds = null;
-      this.statusText = 'No target locked. Align focus reticle & tap Scan Target.';
+      this.statusText = "No target locked. Align focus reticle & tap Scan Target.";
       return;
     }
 
@@ -218,7 +215,7 @@ export class TrackingManager {
       lockedTarget.templateData,
       lockedTarget.templateWidth,
       lockedTarget.templateHeight,
-      lastCenter
+      lastCenter,
     );
 
     if (trackResult.detected) {
@@ -233,25 +230,25 @@ export class TrackingManager {
       this.targetPosition.set(normX * 0.8, normY * 0.6, estZ);
 
       // Subtle tilt based on position
-      const euler = new THREE.Euler(normY * 0.25, -normX * 0.25, 0, 'YXZ');
+      const euler = new THREE.Euler(normY * 0.25, -normX * 0.25, 0, "YXZ");
       this.targetQuaternion.setFromEuler(euler);
 
       if (this.confidence >= 0.7) {
-        this.state = 'reliable';
+        this.state = "reliable";
         this.statusText = `Target “${lockedTarget.label}” tracked (${Math.round(this.confidence * 100)}%)`;
       } else {
-        this.state = 'uncertain';
+        this.state = "uncertain";
         this.statusText = `Target tracking uncertain (${Math.round(this.confidence * 100)}%)`;
       }
     } else {
       this.confidence = Math.max(0, this.confidence - 0.15);
       if (this.confidence < this.confidenceThreshold) {
-        this.state = 'lost';
+        this.state = "lost";
         this.targetBounds = null;
-        this.statusText = 'Target lost. Realign camera with selected target.';
+        this.statusText = "Target lost. Realign camera with selected target.";
       } else {
-        this.state = 'uncertain';
-        this.statusText = 'Target tracking uncertain';
+        this.state = "uncertain";
+        this.statusText = "Target tracking uncertain";
       }
     }
   }
@@ -262,14 +259,14 @@ export class TrackingManager {
   private processDeviceOrientationTracking() {
     if (this.hasDeviceOrientation) {
       this.confidence = 0.85;
-      this.state = 'reliable';
+      this.state = "reliable";
       this.targetQuaternion.setFromEuler(this.deviceEuler);
       this.targetPosition.set(0, 0, -1.2);
-      this.statusText = 'Device gyro orientation active';
+      this.statusText = "Device gyro orientation active";
     } else {
       this.confidence = 0.5;
-      this.state = 'uncertain';
-      this.statusText = 'Gyroscope unavailable. Using touch orbit controls.';
+      this.state = "uncertain";
+      this.statusText = "Gyroscope unavailable. Using touch orbit controls.";
     }
   }
 
@@ -278,11 +275,11 @@ export class TrackingManager {
    */
   private processWebXRTracking() {
     if (!this.isWebXRSupported) {
-      this.state = 'lost';
+      this.state = "lost";
       this.confidence = 0;
-      this.statusText = 'WebXR Immersive-AR not supported on this browser/device.';
+      this.statusText = "WebXR Immersive-AR not supported on this browser/device.";
     } else {
-      this.statusText = 'WebXR session active';
+      this.statusText = "WebXR session active";
     }
   }
 
@@ -296,11 +293,11 @@ export class TrackingManager {
   }
 
   public getSmoothedPose(): TrackingPose {
-    const euler = new THREE.Euler().setFromQuaternion(this.currentQuaternion, 'YXZ');
+    const euler = new THREE.Euler().setFromQuaternion(this.currentQuaternion, "YXZ");
     const mat = new THREE.Matrix4().compose(
       this.currentPosition,
       this.currentQuaternion,
-      new THREE.Vector3(1, 1, 1)
+      new THREE.Vector3(1, 1, 1),
     );
 
     return {
@@ -338,7 +335,7 @@ export class TrackingManager {
     this.currentQuaternion.identity();
     this.targetQuaternion.identity();
     this.confidence = 0;
-    this.state = 'lost';
+    this.state = "lost";
     this.targetBounds = null;
     this.notify();
   }

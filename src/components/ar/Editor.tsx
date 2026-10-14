@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
-import { Link } from '@tanstack/react-router';
+import { useState, useEffect, useRef } from "react";
+import { Link } from "@tanstack/react-router";
 import {
   ArrowLeft,
   Save,
@@ -33,11 +33,11 @@ import {
   Layers,
   Sliders,
   Plus,
-} from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { SceneCanvas } from './SceneCanvas';
-import { ARWorkspace } from './ARWorkspace';
-import { ScannerWorkspace } from '@/components/scanner/ScannerWorkspace';
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { SceneCanvas } from "./SceneCanvas";
+import { ARWorkspace } from "./ARWorkspace";
+import { ScannerWorkspace } from "@/components/scanner/ScannerWorkspace";
 import {
   getProject,
   saveProject,
@@ -45,8 +45,8 @@ import {
   exportProject,
   type Project,
   type SceneObject,
-} from '@/lib/ar/projects';
-import { readModel, exportGLB } from '@/lib/ar/scene';
+} from "@/lib/ar/projects";
+import { readModel, exportGLB } from "@/lib/ar/scene";
 
 const primitiveIcons = {
   cube: Box,
@@ -60,20 +60,20 @@ const primitiveIcons = {
 
 export function Editor({ projectId }: { projectId: string }) {
   const [project, setProject] = useState<Project>();
-  const [selected, setSelected] = useState('');
-  const [mode, setMode] = useState<'translate' | 'rotate' | 'scale'>('translate');
+  const [selected, setSelected] = useState("");
+  const [mode, setMode] = useState<"translate" | "rotate" | "scale">("translate");
   const [past, setPast] = useState<Project[]>([]);
   const [future, setFuture] = useState<Project[]>([]);
-  const [status, setStatus] = useState('');
+  const [status, setStatus] = useState("");
   const [preview, setPreview] = useState(false);
   const [arMode, setArMode] = useState(false);
   const [scannerOpen, setScannerOpen] = useState(false);
-  const [info, setInfo] = useState('');
+  const [info, setInfo] = useState("");
   const [loading, setLoading] = useState(true);
   const [pending, setPending] = useState<{ object: SceneObject; info: string }>();
 
   // Mobile drawer states
-  const [mobileTab, setMobileTab] = useState<'none' | 'add' | 'scene' | 'properties'>('none');
+  const [mobileTab, setMobileTab] = useState<"none" | "add" | "scene" | "properties">("none");
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
 
   const file = useRef<HTMLInputElement>(null);
@@ -83,11 +83,11 @@ export function Editor({ projectId }: { projectId: string }) {
     getProject(projectId)
       .then((p) => {
         setProject(p);
-        setSelected(p?.objects[0]?.id || '');
+        setSelected(p?.objects[0]?.id || "");
         setLoading(false);
       })
       .catch(() => {
-        setStatus('Local storage could not be opened.');
+        setStatus("Local storage could not be opened.");
         setLoading(false);
       });
   }, [projectId]);
@@ -96,8 +96,8 @@ export function Editor({ projectId }: { projectId: string }) {
     const warn = (e: BeforeUnloadEvent) => {
       if (dirty.current) e.preventDefault();
     };
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
+    window.addEventListener("beforeunload", warn);
+    return () => window.removeEventListener("beforeunload", warn);
   }, []);
 
   const change = (p: Project) => {
@@ -105,7 +105,7 @@ export function Editor({ projectId }: { projectId: string }) {
     setPast((s) => [...s, project]);
     setFuture([]);
     setProject({ ...p, updated: Date.now() });
-    setStatus('Unsaved changes');
+    setStatus("Unsaved changes");
     dirty.current = true;
   };
 
@@ -118,7 +118,7 @@ export function Editor({ projectId }: { projectId: string }) {
     }
   };
 
-  const add = (kind: SceneObject['kind']) => {
+  const add = (kind: SceneObject["kind"]) => {
     if (!project) return;
     const o = newObject(kind);
     o.position[0] = project.objects.length * 0.3;
@@ -130,12 +130,10 @@ export function Editor({ projectId }: { projectId: string }) {
     if (!project) return;
     try {
       await saveProject(project);
-      setStatus('Saved on this device');
+      setStatus("Saved on this device");
       dirty.current = false;
     } catch {
-      setStatus(
-        'Save failed: browser storage is full or unavailable. Export a backup.'
-      );
+      setStatus("Save failed: browser storage is full or unavailable. Export a backup.");
     }
   };
 
@@ -147,7 +145,7 @@ export function Editor({ projectId }: { projectId: string }) {
     setPast((s) => s.slice(0, -1));
     setProject(previous);
     dirty.current = true;
-    setStatus('Unsaved changes');
+    setStatus("Unsaved changes");
   };
 
   const redo = () => {
@@ -156,26 +154,26 @@ export function Editor({ projectId }: { projectId: string }) {
     setProject(future[0]);
     setFuture((s) => s.slice(1));
     dirty.current = true;
-    setStatus('Unsaved changes');
+    setStatus("Unsaved changes");
   };
 
   const loadFile = async (f: File) => {
-    setStatus('Reading model…');
+    setStatus("Reading model…");
     try {
       const m = await readModel(f);
-      const o = newObject('model');
+      const o = newObject("model");
       o.name = f.name;
       o.model = m.data;
       setPending({
         object: o,
-        info: `${m.meshes} meshes · ${(m.bytes / 1024).toFixed(0)} KB · ${m.size.map((v) => v.toFixed(2)).join(' × ')} units`,
+        info: `${m.meshes} meshes · ${(m.bytes / 1024).toFixed(0)} KB · ${m.size.map((v) => v.toFixed(2)).join(" × ")} units`,
       });
-      setStatus('Model ready');
+      setStatus("Model ready");
     } catch (e) {
       setStatus(
         e instanceof Error
           ? e.message
-          : 'Invalid model. Use a valid GLB or self-contained glTF file.'
+          : "Invalid model. Use a valid GLB or self-contained glTF file.",
       );
     }
   };
@@ -204,20 +202,11 @@ export function Editor({ projectId }: { projectId: string }) {
       {/* Top Bar */}
       <header className="editor-top">
         <div className="editor-title">
-          <Button
-            variant="ghost"
-            size="icon"
-            asChild
-            title="Back to projects"
-            className="h-8 w-8"
-          >
+          <Button variant="ghost" size="icon" asChild title="Back to projects" className="h-8 w-8">
             <Link
               to="/"
               onClick={(e) => {
-                if (
-                  dirty.current &&
-                  !window.confirm('Leave without saving your changes?')
-                )
+                if (dirty.current && !window.confirm("Leave without saving your changes?"))
                   e.preventDefault();
               }}
             >
@@ -225,19 +214,13 @@ export function Editor({ projectId }: { projectId: string }) {
             </Link>
           </Button>
 
-          <img
-            src="/logo.png"
-            alt="Addis AR logo"
-            className="w-5 h-5 object-contain rounded"
-          />
+          <img src="/logo.png" alt="Addis AR logo" className="w-5 h-5 object-contain rounded" />
 
           <input
             aria-label="Project name"
             value={project.name}
             maxLength={120}
-            onChange={(e) =>
-              change({ ...project, name: e.target.value || 'Untitled' })
-            }
+            onChange={(e) => change({ ...project, name: e.target.value || "Untitled" })}
             className="font-semibold text-xs sm:text-sm text-foreground bg-transparent border-0 max-w-[140px] sm:max-w-[220px]"
           />
         </div>
@@ -281,13 +264,13 @@ export function Editor({ projectId }: { projectId: string }) {
             size="sm"
             className="h-8 text-xs gap-1.5"
             onClick={async () => {
-              setStatus('Exporting GLB…');
+              setStatus("Exporting GLB…");
               try {
                 await exportGLB(project);
-                setStatus('GLB exported');
+                setStatus("GLB exported");
               } catch (e) {
                 setStatus(
-                  `Export failed: ${e instanceof Error ? e.message : 'Try a project backup instead.'}`
+                  `Export failed: ${e instanceof Error ? e.message : "Try a project backup instead."}`,
                 );
               }
             }}
@@ -352,7 +335,7 @@ export function Editor({ projectId }: { projectId: string }) {
                 key={kind}
                 variant="ghost"
                 aria-label={`Add ${kind}`}
-                onClick={() => add(kind as SceneObject['kind'])}
+                onClick={() => add(kind as SceneObject["kind"])}
               >
                 <Icon size={16} />
                 <span>{kind.charAt(0).toUpperCase() + kind.slice(1)}</span>
@@ -388,7 +371,7 @@ export function Editor({ projectId }: { projectId: string }) {
             onChange={(e) => {
               const f = e.target.files?.[0];
               if (f) loadFile(f);
-              e.target.value = '';
+              e.target.value = "";
             }}
           />
 
@@ -401,7 +384,7 @@ export function Editor({ projectId }: { projectId: string }) {
               <div key={o.id} className="hierarchy-row">
                 <Button
                   variant="ghost"
-                  className={selected === o.id ? 'active' : ''}
+                  className={selected === o.id ? "active" : ""}
                   onClick={() => setSelected(o.id)}
                 >
                   <Box size={12} />
@@ -410,8 +393,8 @@ export function Editor({ projectId }: { projectId: string }) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  title={o.visible ? 'Hide object' : 'Show object'}
-                  aria-label={o.visible ? 'Hide object' : 'Show object'}
+                  title={o.visible ? "Hide object" : "Show object"}
+                  aria-label={o.visible ? "Hide object" : "Show object"}
                   onClick={() => update({ ...o, visible: !o.visible })}
                 >
                   {o.visible ? <Eye size={12} /> : <EyeOff size={12} />}
@@ -435,9 +418,9 @@ export function Editor({ projectId }: { projectId: string }) {
           <div className="stage-tools">
             {(
               [
-                ['translate', Move, 'Move'],
-                ['rotate', RotateCw, 'Rotate'],
-                ['scale', Scaling, 'Scale'],
+                ["translate", Move, "Move"],
+                ["rotate", RotateCw, "Rotate"],
+                ["scale", Scaling, "Scale"],
               ] as const
             ).map(([value, Icon, label]) => (
               <Button
@@ -446,7 +429,7 @@ export function Editor({ projectId }: { projectId: string }) {
                 size="icon"
                 title={label}
                 aria-label={label}
-                className={mode === value ? 'active' : ''}
+                className={mode === value ? "active" : ""}
                 onClick={() => setMode(value)}
               >
                 <Icon size={14} />
@@ -480,11 +463,12 @@ export function Editor({ projectId }: { projectId: string }) {
                     const o = {
                       ...object,
                       id: crypto.randomUUID(),
-                      name: object.name + ' copy',
-                      position: [
-                        object.position[0] + 1,
-                        ...object.position.slice(1),
-                      ] as [number, number, number],
+                      name: object.name + " copy",
+                      position: [object.position[0] + 1, ...object.position.slice(1)] as [
+                        number,
+                        number,
+                        number,
+                      ],
                     };
                     change({ ...project, objects: [...project.objects, o] });
                     setSelected(o.id);
@@ -502,7 +486,7 @@ export function Editor({ projectId }: { projectId: string }) {
                       ...project,
                       objects: project.objects.filter((o) => o.id !== selected),
                     });
-                    setSelected('');
+                    setSelected("");
                   }}
                 >
                   <Trash2 size={13} />
@@ -528,41 +512,36 @@ export function Editor({ projectId }: { projectId: string }) {
                   onClick={() => update({ ...object, locked: !object.locked })}
                 >
                   {object.locked ? <Lock size={12} /> : <Unlock size={12} />}
-                  {object.locked ? 'Locked' : 'Unlocked'}
+                  {object.locked ? "Locked" : "Unlocked"}
                 </Button>
 
                 <h3 className="mt-5">TRANSFORM</h3>
-                {(['position', 'rotation', 'scale'] as const).map((field) => (
+                {(["position", "rotation", "scale"] as const).map((field) => (
                   <div key={field}>
                     <label className="property-label">
                       {field.charAt(0).toUpperCase() + field.slice(1)}
-                      {field === 'rotation' ? ' (degrees)' : ''}
+                      {field === "rotation" ? " (degrees)" : ""}
                     </label>
                     <div className="vector-row">
-                      {['X', 'Y', 'Z'].map((axis, index) => (
+                      {["X", "Y", "Z"].map((axis, index) => (
                         <label key={axis}>
                           {axis}
                           <input
                             aria-label={`${field} ${axis}`}
                             type="number"
-                            step={field === 'rotation' ? 5 : 0.1}
+                            step={field === "rotation" ? 5 : 0.1}
                             disabled={object.locked}
                             value={Number(
                               (
                                 (object[field][index] ?? 0) *
-                                (field === 'rotation' ? 180 / Math.PI : 1)
-                              ).toFixed(3)
+                                (field === "rotation" ? 180 / Math.PI : 1)
+                              ).toFixed(3),
                             )}
                             onChange={(e) => {
                               const v = Number(e.target.value);
                               if (!Number.isFinite(v)) return;
-                              const vec = [...object[field]] as [
-                                number,
-                                number,
-                                number,
-                              ];
-                              vec[index] =
-                                v * (field === 'rotation' ? Math.PI / 180 : 1);
+                              const vec = [...object[field]] as [number, number, number];
+                              vec[index] = v * (field === "rotation" ? Math.PI / 180 : 1);
                               update({ ...object, [field]: vec });
                             }}
                           />
@@ -573,7 +552,7 @@ export function Editor({ projectId }: { projectId: string }) {
                 ))}
               </div>
 
-              {object.kind !== 'model' && (
+              {object.kind !== "model" && (
                 <div className="properties-group">
                   <h3>MATERIAL</h3>
                   <label className="property-label">Base color</label>
@@ -594,7 +573,7 @@ export function Editor({ projectId }: { projectId: string }) {
                       }}
                     />
                   </div>
-                  {(['roughness', 'metalness'] as const).map((prop) => (
+                  {(["roughness", "metalness"] as const).map((prop) => (
                     <div key={prop}>
                       <label className="property-label flex justify-between">
                         <span>{prop.charAt(0).toUpperCase() + prop.slice(1)}</span>
@@ -608,9 +587,7 @@ export function Editor({ projectId }: { projectId: string }) {
                         step="0.01"
                         className="material-slider"
                         value={object[prop]}
-                        onChange={(e) =>
-                          update({ ...object, [prop]: Number(e.target.value) })
-                        }
+                        onChange={(e) => update({ ...object, [prop]: Number(e.target.value) })}
                       />
                     </div>
                   ))}
@@ -640,24 +617,24 @@ export function Editor({ projectId }: { projectId: string }) {
       {/* Mobile Bottom Dock (visible on mobile only) */}
       <div className="editor-mobile-dock flex md:hidden">
         <button
-          onClick={() => setMobileTab(mobileTab === 'add' ? 'none' : 'add')}
-          className={`dock-btn ${mobileTab === 'add' ? 'active' : ''}`}
+          onClick={() => setMobileTab(mobileTab === "add" ? "none" : "add")}
+          className={`dock-btn ${mobileTab === "add" ? "active" : ""}`}
         >
           <Plus size={16} />
           <span>Add</span>
         </button>
 
         <button
-          onClick={() => setMobileTab(mobileTab === 'scene' ? 'none' : 'scene')}
-          className={`dock-btn ${mobileTab === 'scene' ? 'active' : ''}`}
+          onClick={() => setMobileTab(mobileTab === "scene" ? "none" : "scene")}
+          className={`dock-btn ${mobileTab === "scene" ? "active" : ""}`}
         >
           <Layers size={16} />
           <span>Scene ({project.objects.length})</span>
         </button>
 
         <button
-          onClick={() => setMobileTab(mobileTab === 'properties' ? 'none' : 'properties')}
-          className={`dock-btn ${mobileTab === 'properties' ? 'active' : ''}`}
+          onClick={() => setMobileTab(mobileTab === "properties" ? "none" : "properties")}
+          className={`dock-btn ${mobileTab === "properties" ? "active" : ""}`}
         >
           <Sliders size={16} />
           <span>Properties</span>
@@ -665,32 +642,29 @@ export function Editor({ projectId }: { projectId: string }) {
       </div>
 
       {/* Mobile Slide-Up Drawers */}
-      {mobileTab !== 'none' && (
-        <div className="mobile-sheet-overlay md:hidden" onClick={() => setMobileTab('none')}>
-          <div
-            className="mobile-sheet-content"
-            onClick={(e) => e.stopPropagation()}
-          >
+      {mobileTab !== "none" && (
+        <div className="mobile-sheet-overlay md:hidden" onClick={() => setMobileTab("none")}>
+          <div className="mobile-sheet-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
               <span className="font-semibold text-xs text-foreground uppercase tracking-wider">
-                {mobileTab === 'add'
-                  ? 'Add to Scene'
-                  : mobileTab === 'scene'
+                {mobileTab === "add"
+                  ? "Add to Scene"
+                  : mobileTab === "scene"
                     ? `Scene Objects (${project.objects.length})`
-                    : `Properties: ${object?.name || 'None'}`}
+                    : `Properties: ${object?.name || "None"}`}
               </span>
               <Button
                 variant="ghost"
                 size="icon"
                 className="h-7 w-7"
-                onClick={() => setMobileTab('none')}
+                onClick={() => setMobileTab("none")}
               >
                 <X size={15} />
               </Button>
             </div>
 
             {/* Content for 'add' */}
-            {mobileTab === 'add' && (
+            {mobileTab === "add" && (
               <div className="space-y-4">
                 <div className="grid grid-cols-4 gap-2">
                   {Object.entries(primitiveIcons).map(([kind, Icon]) => (
@@ -699,12 +673,14 @@ export function Editor({ projectId }: { projectId: string }) {
                       variant="ghost"
                       className="h-16 flex-col gap-1.5 p-1 bg-card border border-border text-[10px]"
                       onClick={() => {
-                        add(kind as SceneObject['kind']);
-                        setMobileTab('none');
+                        add(kind as SceneObject["kind"]);
+                        setMobileTab("none");
                       }}
                     >
                       <Icon size={16} />
-                      <span className="truncate">{kind.charAt(0).toUpperCase() + kind.slice(1)}</span>
+                      <span className="truncate">
+                        {kind.charAt(0).toUpperCase() + kind.slice(1)}
+                      </span>
                     </Button>
                   ))}
                 </div>
@@ -716,7 +692,7 @@ export function Editor({ projectId }: { projectId: string }) {
                     className="text-xs gap-1.5"
                     onClick={() => {
                       file.current?.click();
-                      setMobileTab('none');
+                      setMobileTab("none");
                     }}
                   >
                     <Upload size={13} /> Import GLB
@@ -727,7 +703,7 @@ export function Editor({ projectId }: { projectId: string }) {
                     className="text-xs gap-1.5"
                     onClick={() => {
                       setScannerOpen(true);
-                      setMobileTab('none');
+                      setMobileTab("none");
                     }}
                   >
                     <Scan size={13} className="text-primary" /> Scan Object
@@ -737,17 +713,20 @@ export function Editor({ projectId }: { projectId: string }) {
             )}
 
             {/* Content for 'scene' */}
-            {mobileTab === 'scene' && (
+            {mobileTab === "scene" && (
               <div className="space-y-2 max-h-[48vh] overflow-y-auto">
                 {project.objects.map((o) => (
-                  <div key={o.id} className="flex items-center justify-between p-2 rounded-lg bg-card border border-border">
+                  <div
+                    key={o.id}
+                    className="flex items-center justify-between p-2 rounded-lg bg-card border border-border"
+                  >
                     <button
                       onClick={() => {
                         setSelected(o.id);
-                        setMobileTab('properties');
+                        setMobileTab("properties");
                       }}
                       className={`flex items-center gap-2 text-xs truncate flex-1 text-left ${
-                        selected === o.id ? 'text-primary font-semibold' : 'text-foreground'
+                        selected === o.id ? "text-primary font-semibold" : "text-foreground"
                       }`}
                     >
                       <Box size={13} />
@@ -767,7 +746,7 @@ export function Editor({ projectId }: { projectId: string }) {
             )}
 
             {/* Content for 'properties' */}
-            {mobileTab === 'properties' && (
+            {mobileTab === "properties" && (
               <div className="max-h-[55vh] overflow-y-auto space-y-4">
                 {object ? (
                   <>
@@ -786,8 +765,8 @@ export function Editor({ projectId }: { projectId: string }) {
                             ...project,
                             objects: project.objects.filter((o) => o.id !== selected),
                           });
-                          setSelected('');
-                          setMobileTab('none');
+                          setSelected("");
+                          setMobileTab("none");
                         }}
                       >
                         <Trash2 size={13} />
@@ -795,30 +774,33 @@ export function Editor({ projectId }: { projectId: string }) {
                     </div>
 
                     {/* Transform controls */}
-                    {(['position', 'rotation', 'scale'] as const).map((field) => (
+                    {(["position", "rotation", "scale"] as const).map((field) => (
                       <div key={field} className="space-y-1">
                         <span className="text-[10px] text-muted-foreground uppercase font-mono">
                           {field}
                         </span>
                         <div className="grid grid-cols-3 gap-1.5">
-                          {['X', 'Y', 'Z'].map((axis, index) => (
-                            <label key={axis} className="text-[10px] text-muted-foreground flex items-center gap-1 bg-secondary p-1 rounded border border-border">
+                          {["X", "Y", "Z"].map((axis, index) => (
+                            <label
+                              key={axis}
+                              className="text-[10px] text-muted-foreground flex items-center gap-1 bg-secondary p-1 rounded border border-border"
+                            >
                               <span>{axis}</span>
                               <input
                                 type="number"
-                                step={field === 'rotation' ? 5 : 0.1}
+                                step={field === "rotation" ? 5 : 0.1}
                                 className="w-full bg-transparent text-xs text-foreground p-0 border-0"
                                 value={Number(
                                   (
                                     (object[field][index] ?? 0) *
-                                    (field === 'rotation' ? 180 / Math.PI : 1)
-                                  ).toFixed(2)
+                                    (field === "rotation" ? 180 / Math.PI : 1)
+                                  ).toFixed(2),
                                 )}
                                 onChange={(e) => {
                                   const v = Number(e.target.value);
                                   if (!Number.isFinite(v)) return;
                                   const vec = [...object[field]] as [number, number, number];
-                                  vec[index] = v * (field === 'rotation' ? Math.PI / 180 : 1);
+                                  vec[index] = v * (field === "rotation" ? Math.PI / 180 : 1);
                                   update({ ...object, [field]: vec });
                                 }}
                               />
@@ -829,7 +811,7 @@ export function Editor({ projectId }: { projectId: string }) {
                     ))}
 
                     {/* Material controls */}
-                    {object.kind !== 'model' && (
+                    {object.kind !== "model" && (
                       <div className="space-y-2 pt-2 border-t border-border">
                         <span className="text-[10px] text-muted-foreground uppercase font-mono">
                           Color & Finish
@@ -860,10 +842,7 @@ export function Editor({ projectId }: { projectId: string }) {
       {/* Mobile Top Actions Menu Dialog */}
       {mobileMenuOpen && (
         <div className="dialog-scrim" onClick={() => setMobileMenuOpen(false)}>
-          <div
-            className="dialog-box max-w-xs"
-            onClick={(e) => e.stopPropagation()}
-          >
+          <div className="dialog-box max-w-xs" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between pb-3 border-b border-border mb-3">
               <span className="font-bold text-xs">Editor Actions</span>
               <Button
@@ -924,12 +903,12 @@ export function Editor({ projectId }: { projectId: string }) {
                 className="w-full justify-start gap-2 h-9"
                 onClick={async () => {
                   setMobileMenuOpen(false);
-                  setStatus('Exporting GLB…');
+                  setStatus("Exporting GLB…");
                   try {
                     await exportGLB(project);
-                    setStatus('GLB exported');
+                    setStatus("GLB exported");
                   } catch (e) {
-                    setStatus('Export failed');
+                    setStatus("Export failed");
                   }
                 }}
               >
@@ -952,15 +931,10 @@ export function Editor({ projectId }: { projectId: string }) {
 
       {/* Editor Desktop Bottom Bar */}
       <footer className="editor-bottom hidden md:flex">
-        <span
-          role="status"
-          className={status.includes('Saved') ? 'status-message' : ''}
-        >
-          {status || 'Local project'}{' '}
+        <span role="status" className={status.includes("Saved") ? "status-message" : ""}>
+          {status || "Local project"}{" "}
         </span>
-        <span>
-          {project.objects.length} objects · WebGL · Addis AR
-        </span>
+        <span>{project.objects.length} objects · WebGL · Addis AR</span>
       </footer>
 
       {/* Preview Dialog */}
@@ -1042,10 +1016,7 @@ export function Editor({ projectId }: { projectId: string }) {
       {/* Scanner Modal */}
       {scannerOpen && (
         <div className="fixed inset-0 z-50 bg-background">
-          <ScannerWorkspace
-            targetProject={project}
-            onClose={() => setScannerOpen(false)}
-          />
+          <ScannerWorkspace targetProject={project} onClose={() => setScannerOpen(false)} />
         </div>
       )}
     </div>

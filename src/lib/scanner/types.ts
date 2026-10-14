@@ -13,19 +13,19 @@ export interface ScanPhoto {
 }
 
 export type AngleGroup =
-  | 'front'
-  | 'front-left'
-  | 'front-right'
-  | 'left'
-  | 'right'
-  | 'back'
-  | 'back-left'
-  | 'back-right'
-  | 'top-front'
-  | 'top-side'
-  | 'top-back'
-  | 'top'
-  | 'extra';
+  | "front"
+  | "front-left"
+  | "front-right"
+  | "left"
+  | "right"
+  | "back"
+  | "back-left"
+  | "back-right"
+  | "top-front"
+  | "top-side"
+  | "top-back"
+  | "top"
+  | "extra";
 
 export interface PhotoQuality {
   blurScore: number; // 0-100 (higher is sharper)
@@ -45,28 +45,28 @@ export interface AngleStep {
   instruction: string;
   azimuth: number;
   elevation: number;
-  stageName: 'prepare' | 'front' | 'sides' | 'top' | 'extra';
+  stageName: "prepare" | "front" | "sides" | "top" | "extra";
 }
 
-export type ReconstructionEngineType = 'browser-local' | 'self-hosted-colmap';
+export type ReconstructionEngineType = "browser-local" | "self-hosted-colmap";
 
-export type QualityPreset = 'draft' | 'standard' | 'high';
+export type QualityPreset = "draft" | "standard" | "high";
 
 export interface ReconstructionStageInfo {
   stage:
-    | 'idle'
-    | 'validating'
-    | 'segmenting'
-    | 'feature-matching'
-    | 'pose-estimation'
-    | 'geometry-carving'
-    | 'marching-cubes'
-    | 'texturing'
-    | 'cleanup'
-    | 'optimizing'
-    | 'exporting'
-    | 'complete'
-    | 'failed';
+    | "idle"
+    | "validating"
+    | "segmenting"
+    | "feature-matching"
+    | "pose-estimation"
+    | "geometry-carving"
+    | "marching-cubes"
+    | "texturing"
+    | "cleanup"
+    | "optimizing"
+    | "exporting"
+    | "complete"
+    | "failed";
   progress: number; // 0 - 100
   message: string;
   stats?: {
@@ -83,7 +83,7 @@ export interface ReconstructionStageInfo {
 
 export interface ModelCleanupOptions {
   center: boolean;
-  origin: 'bottom' | 'center' | 'top';
+  origin: "bottom" | "center" | "top";
   scale: number;
   rotationX: number; // radians
   rotationY: number; // radians
@@ -94,105 +94,101 @@ export interface ModelCleanupOptions {
 
 export const SCAN_STEPS: AngleStep[] = [
   {
-    group: 'front',
-    title: 'Front View',
-    instruction: 'Hold the camera directly at eye-level facing the front of the object.',
+    group: "front",
+    title: "Front View",
+    instruction: "Hold the camera directly at eye-level facing the front of the object.",
     azimuth: 0,
     elevation: 0,
-    stageName: 'front',
+    stageName: "front",
   },
   {
-    group: 'front-left',
-    title: 'Front-Left (45°)',
-    instruction: 'Step slightly to the left while keeping the object centered in the reticle.',
+    group: "front-left",
+    title: "Front-Left (45°)",
+    instruction: "Step slightly to the left while keeping the object centered in the reticle.",
     azimuth: 45,
     elevation: 0,
-    stageName: 'front',
+    stageName: "front",
   },
   {
-    group: 'front-right',
-    title: 'Front-Right (315°)',
-    instruction: 'Step to the front-right to complete the frontal arc.',
+    group: "front-right",
+    title: "Front-Right (315°)",
+    instruction: "Step to the front-right to complete the frontal arc.",
     azimuth: 315,
     elevation: 0,
-    stageName: 'front',
+    stageName: "front",
   },
   {
-    group: 'left',
-    title: 'Left Profile (90°)',
-    instruction: 'Move directly to the left side of the object.',
+    group: "left",
+    title: "Left Profile (90°)",
+    instruction: "Move directly to the left side of the object.",
     azimuth: 90,
     elevation: 0,
-    stageName: 'sides',
+    stageName: "sides",
   },
   {
-    group: 'back-left',
-    title: 'Back-Left (135°)',
-    instruction: 'Orbit around to the rear-left corner.',
+    group: "back-left",
+    title: "Back-Left (135°)",
+    instruction: "Orbit around to the rear-left corner.",
     azimuth: 135,
     elevation: 0,
-    stageName: 'sides',
+    stageName: "sides",
   },
   {
-    group: 'back',
-    title: 'Direct Back (180°)',
-    instruction: 'Photograph the rear surface of the object.',
+    group: "back",
+    title: "Direct Back (180°)",
+    instruction: "Photograph the rear surface of the object.",
     azimuth: 180,
     elevation: 0,
-    stageName: 'sides',
+    stageName: "sides",
   },
   {
-    group: 'back-right',
-    title: 'Back-Right (225°)',
-    instruction: 'Orbit to the rear-right corner.',
+    group: "back-right",
+    title: "Back-Right (225°)",
+    instruction: "Orbit to the rear-right corner.",
     azimuth: 225,
     elevation: 0,
-    stageName: 'sides',
+    stageName: "sides",
   },
   {
-    group: 'right',
-    title: 'Right Profile (270°)',
-    instruction: 'Photograph the direct right side of the object.',
+    group: "right",
+    title: "Right Profile (270°)",
+    instruction: "Photograph the direct right side of the object.",
     azimuth: 270,
     elevation: 0,
-    stageName: 'sides',
+    stageName: "sides",
   },
   {
-    group: 'top-front',
-    title: 'Elevated Front (35°)',
-    instruction: 'Raise your camera slightly higher and tilt down toward the front.',
+    group: "top-front",
+    title: "Elevated Front (35°)",
+    instruction: "Raise your camera slightly higher and tilt down toward the front.",
     azimuth: 0,
     elevation: 35,
-    stageName: 'top',
+    stageName: "top",
   },
   {
-    group: 'top-side',
-    title: 'Elevated Side (35°)',
-    instruction: 'Keep elevated height and orbit around the side.',
+    group: "top-side",
+    title: "Elevated Side (35°)",
+    instruction: "Keep elevated height and orbit around the side.",
     azimuth: 90,
     elevation: 35,
-    stageName: 'top',
+    stageName: "top",
   },
   {
-    group: 'top-back',
-    title: 'Elevated Back (35°)',
-    instruction: 'Capture the raised rear angle.',
+    group: "top-back",
+    title: "Elevated Back (35°)",
+    instruction: "Capture the raised rear angle.",
     azimuth: 180,
     elevation: 35,
-    stageName: 'top',
+    stageName: "top",
   },
   {
-    group: 'top',
-    title: 'Direct Top View (70°)',
-    instruction: 'Position your camera looking down from above the top of the object.',
+    group: "top",
+    title: "Direct Top View (70°)",
+    instruction: "Position your camera looking down from above the top of the object.",
     azimuth: 0,
     elevation: 70,
-    stageName: 'top',
+    stageName: "top",
   },
 ];
 
-export type {
-  QualityReport,
-  OverallQualityStatus,
-  ReconstructionMetrics,
-} from './quality-report';
+export type { QualityReport, OverallQualityStatus, ReconstructionMetrics } from "./quality-report";

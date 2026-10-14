@@ -1,7 +1,7 @@
-import * as THREE from 'three';
-import { buildObject } from './scene';
-import type { SceneObject } from './projects';
-import type { TrackingReport } from './tracking-manager';
+import * as THREE from "three";
+import { buildObject } from "./scene";
+import type { SceneObject } from "./projects";
+import type { TrackingReport } from "./tracking-manager";
 
 export class ARSceneRenderer {
   private container: HTMLElement;
@@ -22,18 +22,18 @@ export class ARSceneRenderer {
 
   // Cached objects list
   private currentObjects: SceneObject[] = [];
-  private selectedObjectId = '';
+  private selectedObjectId = "";
 
   constructor(container: HTMLElement) {
     this.container = container;
-    this.canvas = document.createElement('canvas');
-    this.canvas.style.position = 'absolute';
-    this.canvas.style.top = '0';
-    this.canvas.style.left = '0';
-    this.canvas.style.width = '100%';
-    this.canvas.style.height = '100%';
-    this.canvas.style.pointerEvents = 'none';
-    this.canvas.style.zIndex = '2';
+    this.canvas = document.createElement("canvas");
+    this.canvas.style.position = "absolute";
+    this.canvas.style.top = "0";
+    this.canvas.style.left = "0";
+    this.canvas.style.width = "100%";
+    this.canvas.style.height = "100%";
+    this.canvas.style.pointerEvents = "none";
+    this.canvas.style.zIndex = "2";
     this.container.appendChild(this.canvas);
 
     this.scene = new THREE.Scene();
@@ -45,7 +45,7 @@ export class ARSceneRenderer {
       alpha: true,
       antialias: true,
       preserveDrawingBuffer: true,
-      powerPreference: 'high-performance',
+      powerPreference: "high-performance",
     });
     this.renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
     this.renderer.outputColorSpace = THREE.SRGBColorSpace;
@@ -118,7 +118,7 @@ export class ARSceneRenderer {
   /**
    * Updates the 3D scene objects with project data.
    */
-  public async setObjects(objects: SceneObject[], selectedId = ''): Promise<void> {
+  public async setObjects(objects: SceneObject[], selectedId = ""): Promise<void> {
     this.currentObjects = objects;
     this.selectedObjectId = selectedId;
 
@@ -142,7 +142,7 @@ export class ARSceneRenderer {
           this.objectGroups.set(obj.id, existing);
           this.targetAnchor.add(existing);
         } catch (e) {
-          console.error('Failed to build AR object:', e);
+          console.error("Failed to build AR object:", e);
           continue;
         }
       }
@@ -159,7 +159,7 @@ export class ARSceneRenderer {
    * Synchronizes the target anchor pose with the tracking report.
    */
   public updateTracking(report: TrackingReport) {
-    if (report.state === 'lost') {
+    if (report.state === "lost") {
       // Fade or hide target visuals when lost
       if (this.targetRingMesh) {
         (this.targetRingMesh.material as THREE.MeshBasicMaterial).opacity = 0.15;
@@ -175,8 +175,8 @@ export class ARSceneRenderer {
       // Ring pulse color based on tracking quality
       if (this.targetRingMesh) {
         const mat = this.targetRingMesh.material as THREE.MeshBasicMaterial;
-        mat.opacity = report.state === 'reliable' ? 0.85 : 0.45;
-        mat.color.setHex(report.state === 'reliable' ? 0x84cba1 : 0xeaaf71);
+        mat.opacity = report.state === "reliable" ? 0.85 : 0.45;
+        mat.color.setHex(report.state === "reliable" ? 0x84cba1 : 0xeaaf71);
       }
     }
   }

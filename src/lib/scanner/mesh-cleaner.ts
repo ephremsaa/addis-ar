@@ -1,4 +1,4 @@
-import * as THREE from 'three';
+import * as THREE from "three";
 
 export interface MeshCleanerReport {
   originalTriangleCount: number;
@@ -22,11 +22,12 @@ export interface MeshCleanerReport {
  * - Preserves legitimate object geometry, rounded corners, zipper teeth, and seams.
  * - Recomputes angle-weighted surface normals.
  */
-export function cleanReconstructedMesh(
-  geometry: THREE.BufferGeometry
-): { geometry: THREE.BufferGeometry; report: MeshCleanerReport } {
-  const posAttr = geometry.getAttribute('position');
-  const uvAttr = geometry.getAttribute('uv');
+export function cleanReconstructedMesh(geometry: THREE.BufferGeometry): {
+  geometry: THREE.BufferGeometry;
+  report: MeshCleanerReport;
+} {
+  const posAttr = geometry.getAttribute("position");
+  const uvAttr = geometry.getAttribute("uv");
 
   if (!posAttr || posAttr.count < 9) {
     return {
@@ -86,9 +87,15 @@ export function cleanReconstructedMesh(
 
     // Check finite coordinates
     if (
-      !isFinite(tempP1.x) || !isFinite(tempP1.y) || !isFinite(tempP1.z) ||
-      !isFinite(tempP2.x) || !isFinite(tempP2.y) || !isFinite(tempP2.z) ||
-      !isFinite(tempP3.x) || !isFinite(tempP3.y) || !isFinite(tempP3.z)
+      !isFinite(tempP1.x) ||
+      !isFinite(tempP1.y) ||
+      !isFinite(tempP1.z) ||
+      !isFinite(tempP2.x) ||
+      !isFinite(tempP2.y) ||
+      !isFinite(tempP2.z) ||
+      !isFinite(tempP3.x) ||
+      !isFinite(tempP3.y) ||
+      !isFinite(tempP3.z)
     ) {
       nonFiniteCount++;
       continue;
@@ -257,31 +264,34 @@ export function cleanReconstructedMesh(
     const origBase = tri.idx * 3;
 
     newPositions.push(
-      tri.p1.x, tri.p1.y, tri.p1.z,
-      tri.p2.x, tri.p2.y, tri.p2.z,
-      tri.p3.x, tri.p3.y, tri.p3.z
+      tri.p1.x,
+      tri.p1.y,
+      tri.p1.z,
+      tri.p2.x,
+      tri.p2.y,
+      tri.p2.z,
+      tri.p3.x,
+      tri.p3.y,
+      tri.p3.z,
     );
 
     if (uvAttr) {
       newUvs.push(
-        uvAttr.getX(origBase), uvAttr.getY(origBase),
-        uvAttr.getX(origBase + 1), uvAttr.getY(origBase + 1),
-        uvAttr.getX(origBase + 2), uvAttr.getY(origBase + 2)
+        uvAttr.getX(origBase),
+        uvAttr.getY(origBase),
+        uvAttr.getX(origBase + 1),
+        uvAttr.getY(origBase + 1),
+        uvAttr.getX(origBase + 2),
+        uvAttr.getY(origBase + 2),
       );
     }
   }
 
   const cleanedGeometry = new THREE.BufferGeometry();
-  cleanedGeometry.setAttribute(
-    'position',
-    new THREE.Float32BufferAttribute(newPositions, 3)
-  );
+  cleanedGeometry.setAttribute("position", new THREE.Float32BufferAttribute(newPositions, 3));
 
   if (uvAttr && newUvs.length > 0) {
-    cleanedGeometry.setAttribute(
-      'uv',
-      new THREE.Float32BufferAttribute(newUvs, 2)
-    );
+    cleanedGeometry.setAttribute("uv", new THREE.Float32BufferAttribute(newUvs, 2));
   }
 
   cleanedGeometry.computeVertexNormals();

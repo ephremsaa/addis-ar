@@ -1,8 +1,8 @@
-import React, { useRef, useState, useEffect } from 'react';
-import { X, Check, RotateCcw, Paintbrush, Eraser, ZoomIn, ZoomOut, Eye } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import type { ScanPhoto } from '@/lib/scanner/types';
-import { applyBrushEdit } from '@/lib/scanner/background-segmenter';
+import React, { useRef, useState, useEffect } from "react";
+import { X, Check, RotateCcw, Paintbrush, Eraser, ZoomIn, ZoomOut, Eye } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import type { ScanPhoto } from "@/lib/scanner/types";
+import { applyBrushEdit } from "@/lib/scanner/background-segmenter";
 
 interface MaskTouchupModalProps {
   photo: ScanPhoto;
@@ -10,20 +10,14 @@ interface MaskTouchupModalProps {
   onClose: () => void;
 }
 
-export function MaskTouchupModal({
-  photo,
-  onSave,
-  onClose,
-}: MaskTouchupModalProps) {
-  const [mode, setMode] = useState<'restore' | 'erase'>('restore');
+export function MaskTouchupModal({ photo, onSave, onClose }: MaskTouchupModalProps) {
+  const [mode, setMode] = useState<"restore" | "erase">("restore");
   const [brushRadius, setBrushRadius] = useState<number>(18);
-  const [currentMask, setCurrentMask] = useState<string>(
-    photo.maskDataUrl || photo.dataUrl
-  );
+  const [currentMask, setCurrentMask] = useState<string>(photo.maskDataUrl || photo.dataUrl);
   const [currentTrans, setCurrentTrans] = useState<string>(
-    photo.transparentDataUrl || photo.dataUrl
+    photo.transparentDataUrl || photo.dataUrl,
   );
-  const [viewStyle, setViewStyle] = useState<'cutout' | 'mask' | 'original'>('cutout');
+  const [viewStyle, setViewStyle] = useState<"cutout" | "mask" | "original">("cutout");
   const [zoom, setZoom] = useState<number>(1);
   const [isDrawing, setIsDrawing] = useState<boolean>(false);
   const [history, setHistory] = useState<Array<{ mask: string; trans: string }>>([]);
@@ -35,17 +29,13 @@ export function MaskTouchupModal({
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
-    const ctx = canvas.getContext('2d');
+    const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    img.crossOrigin = "anonymous";
     img.src =
-      viewStyle === 'original'
-        ? photo.dataUrl
-        : viewStyle === 'mask'
-          ? currentMask
-          : currentTrans;
+      viewStyle === "original" ? photo.dataUrl : viewStyle === "mask" ? currentMask : currentTrans;
 
     img.onload = () => {
       canvas.width = img.width;
@@ -53,7 +43,7 @@ export function MaskTouchupModal({
 
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      if (viewStyle === 'cutout') {
+      if (viewStyle === "cutout") {
         // Draw checkerboard background for transparent inspection
         drawCheckerboard(ctx, canvas.width, canvas.height);
       }
@@ -63,7 +53,7 @@ export function MaskTouchupModal({
   }, [currentMask, currentTrans, viewStyle]);
 
   const handlePointerDown = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (viewStyle === 'original') return;
+    if (viewStyle === "original") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -79,7 +69,7 @@ export function MaskTouchupModal({
   };
 
   const handlePointerMove = (e: React.PointerEvent<HTMLCanvasElement>) => {
-    if (!isDrawing || viewStyle === 'original') return;
+    if (!isDrawing || viewStyle === "original") return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -108,12 +98,12 @@ export function MaskTouchupModal({
         currentMask,
         strokePoints.current,
         mode,
-        brushRadius
+        brushRadius,
       );
       setCurrentMask(result.maskDataUrl);
       setCurrentTrans(result.transparentDataUrl);
     } catch (err) {
-      console.error('Failed to apply brush edit:', err);
+      console.error("Failed to apply brush edit:", err);
     } finally {
       strokePoints.current = [];
     }
@@ -171,11 +161,11 @@ export function MaskTouchupModal({
           <div className="flex items-center gap-1 bg-background/60 p-1 rounded-lg border border-border/40">
             <Button
               size="sm"
-              variant={mode === 'restore' ? 'default' : 'ghost'}
+              variant={mode === "restore" ? "default" : "ghost"}
               className="h-7 text-xs gap-1.5"
               onClick={() => {
-                setMode('restore');
-                if (viewStyle === 'original') setViewStyle('cutout');
+                setMode("restore");
+                if (viewStyle === "original") setViewStyle("cutout");
               }}
             >
               <Paintbrush className="w-3.5 h-3.5 text-emerald-400" />
@@ -183,11 +173,11 @@ export function MaskTouchupModal({
             </Button>
             <Button
               size="sm"
-              variant={mode === 'erase' ? 'default' : 'ghost'}
+              variant={mode === "erase" ? "default" : "ghost"}
               className="h-7 text-xs gap-1.5"
               onClick={() => {
-                setMode('erase');
-                if (viewStyle === 'original') setViewStyle('cutout');
+                setMode("erase");
+                if (viewStyle === "original") setViewStyle("cutout");
               }}
             >
               <Eraser className="w-3.5 h-3.5 text-rose-400" />
@@ -206,34 +196,32 @@ export function MaskTouchupModal({
               onChange={(e) => setBrushRadius(Number(e.target.value))}
               className="w-24 accent-primary"
             />
-            <span className="text-[11px] font-mono text-muted-foreground w-6">
-              {brushRadius}px
-            </span>
+            <span className="text-[11px] font-mono text-muted-foreground w-6">{brushRadius}px</span>
           </div>
 
           {/* View Mode Toggle */}
           <div className="flex items-center gap-1 bg-background/60 p-1 rounded-lg border border-border/40">
             <Button
               size="sm"
-              variant={viewStyle === 'cutout' ? 'secondary' : 'ghost'}
+              variant={viewStyle === "cutout" ? "secondary" : "ghost"}
               className="h-7 text-xs"
-              onClick={() => setViewStyle('cutout')}
+              onClick={() => setViewStyle("cutout")}
             >
               Cutout
             </Button>
             <Button
               size="sm"
-              variant={viewStyle === 'mask' ? 'secondary' : 'ghost'}
+              variant={viewStyle === "mask" ? "secondary" : "ghost"}
               className="h-7 text-xs"
-              onClick={() => setViewStyle('mask')}
+              onClick={() => setViewStyle("mask")}
             >
               B&W Mask
             </Button>
             <Button
               size="sm"
-              variant={viewStyle === 'original' ? 'secondary' : 'ghost'}
+              variant={viewStyle === "original" ? "secondary" : "ghost"}
               className="h-7 text-xs gap-1"
-              onClick={() => setViewStyle('original')}
+              onClick={() => setViewStyle("original")}
             >
               <Eye className="w-3 h-3" /> Original
             </Button>
@@ -275,7 +263,7 @@ export function MaskTouchupModal({
         {/* Canvas Workspace Area */}
         <div className="relative flex-1 overflow-auto bg-neutral-950 p-6 flex items-center justify-center min-h-[380px]">
           <div
-            style={{ transform: `scale(${zoom})`, transformOrigin: 'center center' }}
+            style={{ transform: `scale(${zoom})`, transformOrigin: "center center" }}
             className="transition-transform duration-100 ease-out shadow-2xl rounded-lg overflow-hidden border border-border/30"
           >
             <canvas
@@ -284,7 +272,7 @@ export function MaskTouchupModal({
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               className={`max-h-[60vh] max-w-full touch-none select-none ${
-                viewStyle !== 'original' ? 'cursor-crosshair' : 'cursor-default'
+                viewStyle !== "original" ? "cursor-crosshair" : "cursor-default"
               }`}
             />
           </div>
@@ -310,16 +298,12 @@ export function MaskTouchupModal({
   );
 }
 
-function drawCheckerboard(
-  ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
-) {
+function drawCheckerboard(ctx: CanvasRenderingContext2D, width: number, height: number) {
   const size = 16;
-  ctx.fillStyle = '#18181b';
+  ctx.fillStyle = "#18181b";
   ctx.fillRect(0, 0, width, height);
 
-  ctx.fillStyle = '#27272a';
+  ctx.fillStyle = "#27272a";
   for (let y = 0; y < height; y += size) {
     for (let x = 0; x < width; x += size) {
       if ((Math.floor(x / size) + Math.floor(y / size)) % 2 === 0) {
