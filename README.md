@@ -1,24 +1,25 @@
-# Addis AR 
+# Addis AR
 
-use project name "Addis AR" and use this logo
+Free, browser-based WebAR creation platform and 3D Object Scanner.
 
-This project was built with [Lovable](https://lovable.dev).
+## Features
 
-## Build with Lovable
-
-Continue developing this project in the [Lovable editor](https://lovable.dev/projects/3007d15b-c617-4471-ba5a-9684038b0ac0).
-
-- **Ship faster**: describe what you want to build and Lovable handles the code.
-- **Stay in sync**: every change made in Lovable is committed straight to this repository.
-- **Full ownership**: this code is yours. Push to `main` on GitHub and your changes sync back into Lovable, ready for your next prompt.
+- **3D Object Scanner**: Camera photogrammetry with 360° guided orbit, real-time background segmentation, keypoint tracking, sparse point cloud triangulation, and watertight manifold GLB reconstruction.
+- **WebAR Studio**: Full-screen AR camera workspace with marker detection, surface plane tracking, and 3D object placement.
+- **Scene Editor**: Client-only 3D scene authoring powered by React Three Fiber with IndexedDB persistence.
+- **Export & Share**: Direct GLB export, OBJ export, texture atlas download, and dataset export.
 
 ## Development
 
-Prefer working locally? You need Node.js and npm — [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating).
+```sh
+npm install
+npm run dev
+```
+
+### Tests & Build
 
 ```sh
-git clone <this-repository-url>
-cd <repository-name>
-npm i
-npm run dev
+npm test          # Run test suite with Vitest
+npx tsc --noEmit  # TypeScript type-checking
+npm run build     # Production bundle build
 ```
