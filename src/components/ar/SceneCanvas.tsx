@@ -6,7 +6,7 @@ import {
   Lightformer,
   Grid,
 } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect } from "react";
+import { createElement, useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 import { toast } from "sonner";
 import { buildObject } from "@/lib/ar/scene";
@@ -63,24 +63,24 @@ function Item({
       group.remove(model);
     };
   }, [model, selected, object.locked]);
-  const content = (
-    <group
-      ref={ref}
-      position={object.position}
-      rotation={object.rotation}
-      scale={object.scale}
-      visible={object.visible}
-      onClick={(e) => {
+  // Preview JSX annotations are DOM attributes, not Three.js properties.
+  // Construct the scene without JSX so metadata cannot reach R3F's reconciler,
+  // including through Drei components that forward their props.
+  const content = createElement("group", {
+      ref,
+      position: object.position,
+      rotation: object.rotation,
+      scale: object.scale,
+      visible: object.visible,
+      onClick: (e: { stopPropagation: () => void }) => {
         e.stopPropagation();
         onSelect?.();
-      }}
-    ></group>
-  );
+      },
+  });
   if (selected && !object.locked && onChange)
-    return (
-      <TransformControls
-        mode={mode}
-        onMouseUp={() => {
+    return createElement(TransformControls, {
+        mode,
+        onMouseUp: () => {
           const g = ref.current;
           if (g)
             onChange({
@@ -89,11 +89,8 @@ function Item({
               rotation: [g.rotation.x, g.rotation.y, g.rotation.z],
               scale: g.scale.toArray(),
             });
-        }}
-      >
-        {content}
-      </TransformControls>
-    );
+        },
+      }, content);
   return content;
 }
 export function SceneCanvas({
@@ -120,56 +117,33 @@ export function SceneCanvas({
       fill: s.getPropertyValue("--scene-fill").trim(),
     };
   }, []);
-  return (
-    <Canvas
-      dpr={1}
-      camera={{ position: thumbnail ? [4, 3, 5] : [7, 6, 11], fov: thumbnail ? 38 : 60 }}
-      gl={{ preserveDrawingBuffer: true }}
-    >
-      <color attach="background" args={[colors.background]} />
-      <ambientLight intensity={0.8} />
-      <directionalLight position={[4, 7, 5]} intensity={2.5} />
-      <Environment resolution={64}>
-        <Lightformer position={[0, 5, 0]} scale={[10, 10, 1]} intensity={2} />
-        <Lightformer
-          color={colors.fill}
-          position={[-5, 2, 0]}
-          rotation-y={Math.PI / 2}
-          scale={[10, 5, 1]}
-          intensity={2}
-        />
-      </Environment>
-      {!thumbnail && (
-        <Grid
-          args={[30, 30]}
-          position={[0, -0.01, 0]}
-          cellSize={1}
-          cellThickness={0.6}
-          sectionSize={5}
-          sectionThickness={1}
-          cellColor={colors.grid}
-          sectionColor={colors.grid}
-          fadeDistance={35}
-          infiniteGrid
-        />
-      )}
-      {objects.map((o) => (
-        <Item
-          key={o.id}
-          object={o}
-          selected={selected === o.id}
-          mode={mode}
-          onSelect={onSelect ? () => onSelect(o.id) : undefined}
-          onChange={onChange}
-        />
-      ))}
-      <OrbitControls
-        makeDefault
-        target={[0, 1, 0]}
-        enablePan={!thumbnail}
-        autoRotate={thumbnail}
-        autoRotateSpeed={0.5}
-      />
-    </Canvas>
+  return createElement(Canvas, {
+    dpr: 1,
+    camera: { position: thumbnail ? [4, 3, 5] : [7, 6, 11], fov: thumbnail ? 38 : 60 },
+    gl: { preserveDrawingBuffer: true },
+  },
+    createElement("color", { attach: "background", args: [colors.background] }),
+    createElement("ambientLight", { intensity: 0.8 }),
+    createElement("directionalLight", { position: [4, 7, 5], intensity: 2.5 }),
+    createElement(Environment, { resolution: 64 },
+      createElement(Lightformer, { position: [0, 5, 0], scale: [10, 10, 1], intensity: 2 }),
+      createElement(Lightformer, {
+        color: colors.fill, position: [-5, 2, 0], rotation: [0, Math.PI / 2, 0],
+        scale: [10, 5, 1], intensity: 2,
+      }),
+    ),
+    !thumbnail && createElement(Grid, {
+      args: [30, 30], position: [0, -0.01, 0], cellSize: 1, cellThickness: 0.6,
+      sectionSize: 5, sectionThickness: 1, cellColor: colors.grid,
+      sectionColor: colors.grid, fadeDistance: 35, infiniteGrid: true,
+    }),
+    ...objects.map((o) => createElement(Item, {
+      key: o.id, object: o, selected: selected === o.id, mode,
+      onSelect: onSelect ? () => onSelect(o.id) : undefined, onChange,
+    })),
+    createElement(OrbitControls, {
+      makeDefault: true, target: [0, 1, 0], enablePan: !thumbnail,
+      autoRotate: thumbnail, autoRotateSpeed: 0.5,
+    }),
   );
 }
