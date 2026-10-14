@@ -24,6 +24,7 @@ import {
   CheckCircle2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import type { ModelCleanupOptions } from '@/lib/scanner/types';
 import { optimizeMesh } from '@/lib/scanner/mesh-optimizer';
 import { download } from '@/lib/ar/projects';
@@ -312,7 +313,7 @@ export function ModelViewer3D({
       const safeName = (modelName.trim() || 'scanned-model').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
       download(blob, `${safeName}.glb`);
     } catch (err: any) {
-      alert(`GLB Download error: ${err.message}`);
+      toast.error(`GLB Download error: ${err.message}`);
     } finally {
       setIsExporting(false);
       setExportMessage('');
@@ -321,7 +322,7 @@ export function ModelViewer3D({
 
   const handleDownloadTextures = () => {
     if (!textureCanvas) {
-      alert('No texture canvas available for this scan.');
+      toast.error('No texture canvas available for this scan.');
       return;
     }
     textureCanvas.toBlob((blob) => {
@@ -341,7 +342,7 @@ export function ModelViewer3D({
       const safeName = (modelName.trim() || 'scanned-model').toLowerCase().replace(/[^a-z0-9_-]/g, '-');
       download(blob, `${safeName}.obj`);
     } catch (err: any) {
-      alert(`OBJ Export error: ${err.message}`);
+      toast.error(`OBJ Export error: ${err.message}`);
     }
   };
 
@@ -352,7 +353,7 @@ export function ModelViewer3D({
       const { blob, dataUrl } = await generateCurrentGLB();
       onOpenInEditor?.(blob, dataUrl);
     } catch (err: any) {
-      alert(`Editor transfer error: ${err.message}`);
+      toast.error(`Editor transfer error: ${err.message}`);
     } finally {
       setIsExporting(false);
       setExportMessage('');
@@ -366,7 +367,7 @@ export function ModelViewer3D({
       const { blob, dataUrl } = await generateCurrentGLB();
       onOpenInAR?.(blob, dataUrl);
     } catch (err: any) {
-      alert(`AR transfer error: ${err.message}`);
+      toast.error(`AR transfer error: ${err.message}`);
     } finally {
       setIsExporting(false);
       setExportMessage('');

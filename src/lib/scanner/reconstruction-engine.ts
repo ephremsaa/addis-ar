@@ -262,6 +262,13 @@ export async function reconstruct3DModel(
   const cleanPos = cleanGeometry.getAttribute('position');
   const cleanedVertexCount = cleanPos ? cleanPos.count : 0;
 
+  if (cleanedVertexCount < 300) {
+    cleanGeometry.dispose();
+    throw new Error(
+      'Reconstruction produced an empty or degenerate model. Re-capture with the object centered, evenly lit, on a plain background, moving in a steady circle.'
+    );
+  }
+
   // --- STAGE 7: MULTI-VIEW TEXTURE MAPPING ---
   onProgress?.({
     stage: 'texturing',

@@ -38,6 +38,7 @@ import {
   Info,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { toast } from 'sonner';
 import {
   type ScanPhoto,
   type AngleGroup,
@@ -272,11 +273,12 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     } catch (err: any) {
       console.error('Camera initialization failed:', err);
       setCameraActive(false);
-      setCameraError(
+      const errorMsg =
         err?.name === 'NotAllowedError'
           ? 'Camera permission was denied. Please allow camera access in your browser settings to scan in real-time, or upload photos below.'
-          : 'Unable to start camera stream. Please ensure no other application is using the camera.'
-      );
+          : 'Unable to start camera stream. Please ensure no other application is using the camera.';
+      setCameraError(errorMsg);
+      toast.error(errorMsg);
     } finally {
       setCameraInitializing(false);
     }
@@ -321,6 +323,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         setTorchOn(!torchOn);
       } catch (err) {
         console.warn('Torch toggle failed:', err);
+        toast.error('Torch toggle is not supported on this camera device.');
       }
     }
   };
@@ -392,6 +395,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       }
     } catch (err: any) {
       console.error('Frame processing failed:', err);
+      toast.error('Frame processing failed: ' + (err?.message || 'Unknown error'));
     } finally {
       setIsProcessingFrames(false);
       setFrameProcessingMessage('');
@@ -532,7 +536,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         text: `Imported ${importedPhotos.length} views from dataset`,
       });
     } catch (err: any) {
-      alert(`Dataset import failed: ${err.message}`);
+      toast.error(`Dataset import failed: ${err.message}`);
     } finally {
       setIsProcessingFrames(false);
       setFrameProcessingMessage('');
@@ -565,7 +569,7 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
     stopCameraStream();
 
     if (photos.length < 3) {
-      alert('Please capture or upload at least 3 photos from different angles to reconstruct a 3D model.');
+      toast.error('Please capture or upload at least 3 photos from different angles to reconstruct a 3D model.');
       return;
     }
 
@@ -591,10 +595,12 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
       setCurrentScreen('result');
     } catch (err: any) {
       console.error('Reconstruction error:', err);
+      const msg = err?.message || 'Reconstruction failed. Please review your views and try again.';
+      toast.error(msg);
       setReconstructionStage({
         stage: 'failed',
         progress: 0,
-        message: err?.message || 'Reconstruction failed. Please review your views and try again.',
+        message: msg,
       });
     }
   };
@@ -623,8 +629,9 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
         to: '/editor/$projectId',
         params: { projectId: updatedProject.id },
       });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to import model into Addis AR editor:', err);
+      toast.error('Failed to import model into Addis AR editor: ' + (err?.message || 'Unknown error'));
     }
   };
 
@@ -649,8 +656,9 @@ export function ScannerWorkspace({ onClose, targetProject }: ScannerWorkspacePro
 
       await saveProject(updatedProject);
       navigate({ to: '/ar' });
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to open in AR:', err);
+      toast.error('Failed to open in AR: ' + (err?.message || 'Unknown error'));
     }
   };
 
