@@ -6,7 +6,7 @@ import {
   Lightformer,
   Grid,
 } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect } from "react";
+import { useMemo, useRef, useState, useEffect, createElement } from "react";
 import * as THREE from "three";
 import { toast } from "sonner";
 import { buildObject } from "@/lib/ar/scene";
@@ -67,7 +67,7 @@ function Item({
         onSelect?.();
       }}
     >
-      {model && <primitive object={model} />}
+      {model && createElement("primitive", { object: model })}
     </group>
   );
   if (selected && !object.locked && onChange)
