@@ -10,9 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as ArRouteImport } from './routes/ar'
 import { Route as DocsRouteImport } from './routes/docs'
-import { Route as ScannerRouteImport } from './routes/scanner'
 import { Route as TemplatesRouteImport } from './routes/templates'
 import { Route as WelcomeRouteImport } from './routes/welcome'
 import { Route as EditorProjectIdRouteImport } from './routes/editor.$projectId'
@@ -22,19 +20,9 @@ const IndexRoute = IndexRouteImport.update({
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
-const ArRoute = ArRouteImport.update({
-  id: '/ar',
-  path: '/ar',
-  getParentRoute: () => rootRouteImport,
-} as any)
 const DocsRoute = DocsRouteImport.update({
   id: '/docs',
   path: '/docs',
-  getParentRoute: () => rootRouteImport,
-} as any)
-const ScannerRoute = ScannerRouteImport.update({
-  id: '/scanner',
-  path: '/scanner',
   getParentRoute: () => rootRouteImport,
 } as any)
 const TemplatesRoute = TemplatesRouteImport.update({
@@ -55,18 +43,14 @@ const EditorProjectIdRoute = EditorProjectIdRouteImport.update({
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
-  '/ar': typeof ArRoute
   '/docs': typeof DocsRoute
-  '/scanner': typeof ScannerRoute
   '/templates': typeof TemplatesRoute
   '/welcome': typeof WelcomeRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
-  '/ar': typeof ArRoute
   '/docs': typeof DocsRoute
-  '/scanner': typeof ScannerRoute
   '/templates': typeof TemplatesRoute
   '/welcome': typeof WelcomeRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
@@ -74,38 +58,20 @@ export interface FileRoutesByTo {
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
-  '/ar': typeof ArRoute
   '/docs': typeof DocsRoute
-  '/scanner': typeof ScannerRoute
   '/templates': typeof TemplatesRoute
   '/welcome': typeof WelcomeRoute
   '/editor/$projectId': typeof EditorProjectIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths:
-    | '/'
-    | '/ar'
-    | '/docs'
-    | '/scanner'
-    | '/templates'
-    | '/welcome'
-    | '/editor/$projectId'
+  fullPaths: '/' | '/docs' | '/templates' | '/welcome' | '/editor/$projectId'
   fileRoutesByTo: FileRoutesByTo
-  to:
-    | '/'
-    | '/ar'
-    | '/docs'
-    | '/scanner'
-    | '/templates'
-    | '/welcome'
-    | '/editor/$projectId'
+  to: '/' | '/docs' | '/templates' | '/welcome' | '/editor/$projectId'
   id:
     | '__root__'
     | '/'
-    | '/ar'
     | '/docs'
-    | '/scanner'
     | '/templates'
     | '/welcome'
     | '/editor/$projectId'
@@ -113,9 +79,7 @@ export interface FileRouteTypes {
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
-  ArRoute: typeof ArRoute
   DocsRoute: typeof DocsRoute
-  ScannerRoute: typeof ScannerRoute
   TemplatesRoute: typeof TemplatesRoute
   WelcomeRoute: typeof WelcomeRoute
   EditorProjectIdRoute: typeof EditorProjectIdRoute
@@ -130,25 +94,11 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/ar': {
-      id: '/ar'
-      path: '/ar'
-      fullPath: '/ar'
-      preLoaderRoute: typeof ArRouteImport
-      parentRoute: typeof rootRouteImport
-    }
     '/docs': {
       id: '/docs'
       path: '/docs'
       fullPath: '/docs'
       preLoaderRoute: typeof DocsRouteImport
-      parentRoute: typeof rootRouteImport
-    }
-    '/scanner': {
-      id: '/scanner'
-      path: '/scanner'
-      fullPath: '/scanner'
-      preLoaderRoute: typeof ScannerRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/templates': {
@@ -177,9 +127,7 @@ declare module '@tanstack/react-router' {
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
-  ArRoute: ArRoute,
   DocsRoute: DocsRoute,
-  ScannerRoute: ScannerRoute,
   TemplatesRoute: TemplatesRoute,
   WelcomeRoute: WelcomeRoute,
   EditorProjectIdRoute: EditorProjectIdRoute,

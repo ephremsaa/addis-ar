@@ -1,7 +1,104 @@
-import { createFileRoute, Link } from '@tanstack/react-router';
-import { Workspace } from '@/components/ar/Workspace';
-import { Button } from '@/components/ui/button';
-import { ArrowUpRight, Box, HardDrive, SlidersHorizontal } from 'lucide-react';
-import banner from '@/assets/studio-banner.jpg';
-export const Route=createFileRoute('/welcome')({head:()=>({meta:[{title:'Create your next dimension · Addis AR'},{name:'description',content:'Free, local-first 3D creation with Addis AR. No code, accounts or API keys required.'},{property:'og:title',content:'Create your next dimension · Addis AR'},{property:'og:description',content:'Create and customize 3D scenes in a free local-first workspace.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Welcome});
-function Welcome(){return <Workspace page="About Addis AR"><main className="main-content"><section className="studio-banner welcome-cover"><img src={banner} width={1536} height={512} alt="Glass torus and geometric 3D objects"/><div className="banner-content"><div className="eyebrow">YOUR NEXT DIMENSION</div><h1>Addis AR</h1><h2>Create Augmented Reality.<br/>No Code. No Limits.</h2><p>Start with a 3D scene. Anchor it in the real world.</p><div className="flex gap-3 flex-wrap"><Button asChild><Link to="/">Start creating for free<ArrowUpRight/></Link></Button><Button asChild variant="secondary"><Link to="/ar">Launch AR Camera</Link></Button><Button asChild variant="ghost"><Link to="/templates">Explore experiences</Link></Button></div></div></section><div className="welcome-features"><div><Box className="text-primary mb-4"/><h3>Make something new</h3><p className="text-muted-foreground text-xs mt-3">Build with primitives or bring your own 3D model.</p></div><div><SlidersHorizontal className="text-cyan mb-4"/><h3>Every detail is yours</h3><p className="text-muted-foreground text-xs mt-3">Shape your scene with precise transforms and materials.</p></div><div><HardDrive className="text-success mb-4"/><h3>Keep your independence</h3><p className="text-muted-foreground text-xs mt-3">Local projects. Portable backups. No account required.</p></div></div><div className="document-content"><h2>From idea to experience</h2><p>Create a project, build your scene and open your device camera. Anchor objects with Focus & Place visual tracking, optical fiducial markers, or WebXR plane detection without paid subscriptions or API keys.</p><h2>Frequently asked questions</h2><h3 className="mt-5">Is creation free?</h3><p>Yes. Local creation requires no paid account, AR API or API key. Real device and browser storage limits still apply.</p><h3>Can I open it on another device?</h3><p>Export a project backup and import it on the other device. Public sharing is not configured yet.</p><Button variant="link" asChild><Link to="/docs">Read documentation<ArrowUpRight/></Link></Button></div></main></Workspace>;}
+import { createFileRoute, Link } from "@tanstack/react-router";
+import { Workspace } from "@/components/ar/Workspace";
+import { Button } from "@/components/ui/button";
+import { ArrowUpRight, Box, HardDrive, SlidersHorizontal } from "lucide-react";
+import banner from "@/assets/studio-banner.jpg";
+export const Route = createFileRoute("/welcome")({
+  head: () => ({
+    meta: [
+      { title: "Create your next dimension · Addis AR" },
+      {
+        name: "description",
+        content:
+          "Free, local-first 3D creation with Addis AR. No code, accounts or API keys required.",
+      },
+      { property: "og:title", content: "Create your next dimension · Addis AR" },
+      {
+        property: "og:description",
+        content: "Create and customize 3D scenes in a free local-first workspace.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: Welcome,
+});
+function Welcome() {
+  return (
+    <Workspace page="About Addis AR">
+      <main className="main-content">
+        <section className="studio-banner welcome-cover">
+          <img src={banner} width={1536} height={512} alt="Glass torus and geometric 3D objects" />
+          <div className="banner-content">
+            <div className="eyebrow">YOUR NEXT DIMENSION</div>
+            <h1>Addis AR</h1>
+            <h2>
+              Create Augmented Reality.
+              <br />
+              No Code. No Limits.
+            </h2>
+            <p>Start with a 3D scene. Make it entirely yours.</p>
+            <div className="flex gap-3 flex-wrap">
+              <Button asChild>
+                <Link to="/">
+                  Start creating for free
+                  <ArrowUpRight />
+                </Link>
+              </Button>
+              <Button asChild variant="secondary">
+                <Link to="/templates">Explore experiences</Link>
+              </Button>
+            </div>
+          </div>
+        </section>
+        <div className="welcome-features">
+          <div>
+            <Box className="text-primary mb-4" />
+            <h3>Make something new</h3>
+            <p className="text-muted-foreground text-xs mt-3">
+              Build with primitives or bring your own 3D model.
+            </p>
+          </div>
+          <div>
+            <SlidersHorizontal className="text-cyan mb-4" />
+            <h3>Every detail is yours</h3>
+            <p className="text-muted-foreground text-xs mt-3">
+              Shape your scene with precise transforms and materials.
+            </p>
+          </div>
+          <div>
+            <HardDrive className="text-success mb-4" />
+            <h3>Keep your independence</h3>
+            <p className="text-muted-foreground text-xs mt-3">
+              Local projects. Portable backups. No account required.
+            </p>
+          </div>
+        </div>
+        <div className="document-content">
+          <h2>From idea to experience</h2>
+          <p>
+            Create a project, build your scene and save a backup. Standard 3D preview is available
+            now; camera-based AR tracking and online publishing are not part of this release.
+          </p>
+          <h2>Frequently asked questions</h2>
+          <h3 className="mt-5">Is creation free?</h3>
+          <p>
+            Yes. Local creation requires no paid account, AR API or API key. Real device and browser
+            storage limits still apply.
+          </p>
+          <h3>Can I open it on another device?</h3>
+          <p>
+            Export a project backup and import it on the other device. Public sharing is not
+            configured yet.
+          </p>
+          <Button variant="link" asChild>
+            <Link to="/docs">
+              Read documentation
+              <ArrowUpRight />
+            </Link>
+          </Button>
+        </div>
+      </main>
+    </Workspace>
+  );
+}

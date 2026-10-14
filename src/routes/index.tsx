@@ -1,3 +1,23 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { Dashboard } from '@/components/ar/Dashboard';
-export const Route=createFileRoute('/')({ssr:false,head:()=>({meta:[{title:'My projects · Addis AR'},{name:'description',content:'Your local-first creative workspace. Create, save and edit 3D experiences with Addis AR.'},{property:'og:title',content:'My projects · Addis AR'},{property:'og:description',content:'Create, save and edit 3D experiences. No account or API key required.'},{property:'og:type',content:'website'},{name:'twitter:card',content:'summary_large_image'}]}),component:Dashboard});
+import { createFileRoute } from "@tanstack/react-router";
+import { Dashboard } from "@/components/ar/Dashboard";
+export const Route = createFileRoute("/")({
+  ssr: false,
+  head: () => ({
+    meta: [
+      { title: "My projects · Addis AR" },
+      {
+        name: "description",
+        content:
+          "Your local-first creative workspace. Create, save and edit 3D experiences with Addis AR.",
+      },
+      { property: "og:title", content: "My projects · Addis AR" },
+      {
+        property: "og:description",
+        content: "Create, save and edit 3D experiences. No account or API key required.",
+      },
+      { property: "og:type", content: "website" },
+      { name: "twitter:card", content: "summary_large_image" },
+    ],
+  }),
+  component: Dashboard,
+});
