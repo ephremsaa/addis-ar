@@ -1,4 +1,33 @@
-import 'fake-indexeddb/auto';
-import { describe,it,expect } from 'vitest';
-import { newProject,newObject,saveProject,getProject,deleteProject,projectSchema } from '@/lib/ar/projects';
-describe('Local-first projects',()=>{it('persists edited objects and restores transforms and color',async()=>{const p=newProject('Acceptance project');const cube=newObject('cube');cube.position=[2,3,1];cube.color='#58ced7';p.objects.push(cube);await saveProject(p);const restored=await getProject(p.id);expect(restored?.objects[0]?.position).toEqual([2,3,1]);expect(restored?.objects[0]?.color).toBe('#58ced7');await deleteProject(p.id);expect(await getProject(p.id)).toBeUndefined();});it('validates backups and rejects invalid transforms',()=>{const p=newProject();p.objects.push(newObject('cube'));expect(projectSchema.parse(JSON.parse(JSON.stringify(p)))).toEqual(p);expect(()=>projectSchema.parse({...p,objects:[{...p.objects[0],position:[NaN,0,0]}]})).toThrow();});});
+import "fake-indexeddb/auto";
+import { describe, it, expect } from "vitest";
+import {
+  newProject,
+  newObject,
+  saveProject,
+  getProject,
+  deleteProject,
+  projectSchema,
+} from "@/lib/ar/projects";
+describe("Local-first projects", () => {
+  it("persists edited objects and restores transforms and color", async () => {
+    const p = newProject("Acceptance project");
+    const cube = newObject("cube");
+    cube.position = [2, 3, 1];
+    cube.color = "#58ced7";
+    p.objects.push(cube);
+    await saveProject(p);
+    const restored = await getProject(p.id);
+    expect(restored?.objects[0]?.position).toEqual([2, 3, 1]);
+    expect(restored?.objects[0]?.color).toBe("#58ced7");
+    await deleteProject(p.id);
+    expect(await getProject(p.id)).toBeUndefined();
+  });
+  it("validates backups and rejects invalid transforms", () => {
+    const p = newProject();
+    p.objects.push(newObject("cube"));
+    expect(projectSchema.parse(JSON.parse(JSON.stringify(p)))).toEqual(p);
+    expect(() =>
+      projectSchema.parse({ ...p, objects: [{ ...p.objects[0], position: [NaN, 0, 0] }] }),
+    ).toThrow();
+  });
+});

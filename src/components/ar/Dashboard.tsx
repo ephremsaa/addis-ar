@@ -1,17 +1,481 @@
-import { useEffect, useState, useRef } from 'react';
-import { useNavigate } from '@tanstack/react-router';
-import { Plus, Upload, Search, Grid2X2, List, MoreHorizontal, Box, ArrowUpRight, Sparkles, FolderOpen, Copy, Trash2, Pencil, Download, Lock, ChevronRight } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { Workspace } from './Workspace';
-import { SceneCanvas } from './SceneCanvas';
-import { listProjects, saveProject, deleteProject, newProject, importProject, exportProject, download, type Project } from '@/lib/ar/projects';
-import banner from '@/assets/studio-banner.jpg';
-export const templates=['Sculpture studio','Geometric playground','Material study'];
-export function Dashboard({templatesOnly=false}:{templatesOnly?:boolean}){const [projects,setProjects]=useState<Project[]>([]);const [search,setSearch]=useState('');const [sort,setSort]=useState('recent');const [view,setView]=useState('grid');const [filter,setFilter]=useState('all');const [dialog,setDialog]=useState<{type:'new'|'rename'|'delete';project?:Project}|null>(null);const [name,setName]=useState('');const [menu,setMenu]=useState('');const [error,setError]=useState('');const input=useRef<HTMLInputElement>(null);const navigate=useNavigate();const reload=()=>listProjects().then(setProjects).catch(()=>setError('Unable to open local storage. Check your browser settings.'));useEffect(()=>{reload();},[]);
- const open=(id:string)=>navigate({to:'/editor/$projectId',params:{projectId:id}});
- const create=async(template?:string)=>{try{const p=newProject(template||name||'Untitled experience',template);await saveProject(p);open(p.id);}catch{setError('Project could not be saved. Export backups and check available browser storage.');}};
- const filtered=projects.filter(p=>p.name.toLowerCase().includes(search.toLowerCase())&&(filter!=='recent'||Date.now()-p.updated<7*86400000)).sort((a,b)=>sort==='name'?a.name.localeCompare(b.name):b.updated-a.updated);
- const backup=()=>download(new Blob([JSON.stringify({format:'addis-ar-backup',projects})],{type:'application/json'}),'addis-ar-backup.json');
- return <Workspace page={templatesOnly?'Templates':'My projects'}><main className="main-content"><div className="page-heading"><div><h1>{templatesOnly?'Start with a little inspiration.':'My projects'}</h1><p>{templatesOnly?'A starting point for your next dimension.':'Your ideas, in a whole new dimension.'}</p></div><div className="flex gap-2"><Button variant="outline" onClick={()=>input.current?.click()}><Upload/>Import project</Button><Button onClick={()=>{setName('');setDialog({type:'new'});}}><Plus/>New project</Button></div></div><input ref={input} type="file" accept=".addisar,.json" hidden onChange={async e=>{const f=e.target.files?.[0];if(!f)return;try{const json=JSON.parse(await f.text());if(json.format==='addis-ar-backup'&&Array.isArray(json.projects)){for(const entry of json.projects){const p=await importProject(new File([JSON.stringify(entry)],'project.addisar'));await saveProject(p);}await reload();}else{const p=await importProject(f);await saveProject(p);await reload();}}catch{setError('This is not a valid Addis AR project or backup.');}e.target.value='';}}/>{error&&<div role="alert" className="mb-5 text-destructive">{error}<Button variant="ghost" size="sm" onClick={()=>setError('')}>Dismiss</Button></div>}
- {!templatesOnly&&<><section className="studio-banner"><img src={banner} alt="Glass and chrome 3D shapes in a creative studio" width={1536} height={512}/><div className="banner-content"><div className="eyebrow"><Sparkles size={13}/>MAKE ROOM FOR YOUR IMAGINATION</div><h2>Small ideas.<br/>Extraordinary dimensions.</h2><p>Create something the world hasn’t seen before.</p><Button variant="secondary" size="sm" onClick={()=>{setName('');setDialog({type:'new'});}}>Create an experience<ArrowUpRight/></Button></div></section><div className="section-title"><h2>Your projects<span className="count">{projects.length}</span></h2><Button variant="ghost" size="sm" onClick={backup} disabled={!projects.length}><Download/>Back up all</Button></div><div className="filters"><div className="filter-tabs"><Button size="sm" variant={filter==='all'?'secondary':'ghost'} onClick={()=>setFilter('all')}>All projects</Button><Button size="sm" variant={filter==='recent'?'secondary':'ghost'} onClick={()=>setFilter('recent')}>Recently edited</Button></div><div className="filter-right"><div className="searchbox"><Search size={14}/><input aria-label="Search projects" placeholder="Search projects…" value={search} onChange={e=>setSearch(e.target.value)}/></div><select aria-label="Sort projects" value={sort} onChange={e=>setSort(e.target.value)}><option value="recent">Last modified</option><option value="name">Name A–Z</option></select><div className="view-toggle"><Button aria-label="Grid view" title="Grid view" variant="ghost" size="icon" className={view==='grid'?'active':''} onClick={()=>setView('grid')}><Grid2X2/></Button><Button aria-label="List view" title="List view" variant="ghost" size="icon" className={view==='list'?'active':''} onClick={()=>setView('list')}><List/></Button></div></div></div><div className={`project-grid ${view==='list'?'list-view':''}`}>{filtered.map(p=><article className="project-card" key={p.id}><div className="project-visual" onClick={()=>open(p.id)} role="link" tabIndex={0} onKeyDown={e=>{if(e.key==='Enter')open(p.id);}} aria-label={`Open ${p.name}`}><div className="mode-badge"><Box size={10}/>3D experience</div><SceneCanvas objects={p.objects} thumbnail/></div><div className="project-meta"><div><h3>{p.name}</h3><p><FolderOpen size={10}/>Local draft<span>·</span>{new Date(p.updated).toLocaleDateString(undefined,{month:'short',day:'numeric'})}</p></div><Button variant="ghost" size="icon" aria-label={`Options for ${p.name}`} onClick={()=>setMenu(menu===p.id?'':p.id)}><MoreHorizontal/></Button></div>{menu===p.id&&<div className="card-menu"><Button variant="ghost" onClick={()=>{setName(p.name);setDialog({type:'rename',project:p});setMenu('');}}><Pencil/>Rename</Button><Button variant="ghost" onClick={async()=>{await saveProject({...p,id:crypto.randomUUID(),name:p.name+' copy',updated:Date.now()});setMenu('');reload();}}><Copy/>Duplicate</Button><Button variant="ghost" onClick={()=>{exportProject(p);setMenu('');}}><Download/>Export</Button><Button variant="ghost" onClick={()=>{setDialog({type:'delete',project:p});setMenu('');}}><Trash2/>Delete</Button></div>}</article>)}<Button variant="ghost" className="new-card" onClick={()=>{setName('');setDialog({type:'new'});}}><span className="plus-box"><Plus size={22}/></span><h3>Create a new project</h3><p>A blank canvas. Endless possibilities.</p></Button></div>{!filtered.length&&search&&<p className="project-empty">No projects match “{search}”.</p>}</>}
- <section className="template-section"><div className="section-title"><h2>{templatesOnly?'3D starter templates':'A head start for your next idea'}</h2>{!templatesOnly&&<Button variant="ghost" size="sm" asChild><a href="/templates">Browse templates<ChevronRight/></a></Button>}</div><div className="template-grid">{templates.map((t,i)=><Button key={t} variant="ghost" className="template-card" onClick={()=>create(t)}><div className="template-preview"><SceneCanvas objects={newProject(t,t).objects} thumbnail/></div><div><h3>{t}</h3><p>{['A form worth exploring','Play with shape and space','Find your perfect finish'][i]}</p></div><ArrowUpRight className="ml-auto text-muted-foreground"/></Button>)}</div></section><div className="bottom-note"><Lock size={11}/>Free to create. No account. No API keys. Just your imagination.</div></main>{dialog&&<div className="dialog-scrim" onClick={()=>setDialog(null)}><form className="dialog-box" role="dialog" aria-modal="true" aria-label={dialog.type==='new'?'New project':dialog.type==='rename'?'Rename project':'Delete project'} onClick={e=>e.stopPropagation()} onSubmit={async e=>{e.preventDefault();if(dialog.type==='new')await create();else if(dialog.project){if(dialog.type==='delete')await deleteProject(dialog.project.id);else await saveProject({...dialog.project,name:name.trim()||dialog.project.name,updated:Date.now()});await reload();}setDialog(null);}}><h2>{dialog.type==='new'?'A new dimension starts here.':dialog.type==='rename'?'Rename project':'Delete this project?'}</h2>{dialog.type==='delete'?<p>“{dialog.project?.name}” will be removed from this device. Export a backup first if you want to keep it.</p>:<><label htmlFor="project-name">Project name</label><input id="project-name" autoFocus required maxLength={120} placeholder="Untitled experience" value={name} onChange={e=>setName(e.target.value)}/><p>3D preview · Stored on this device</p></>}<div className="dialog-actions"><Button type="button" variant="ghost" onClick={()=>setDialog(null)}>Cancel</Button><Button type="submit" variant={dialog.type==='delete'?'destructive':'default'}>{dialog.type==='new'?'Create project':dialog.type==='rename'?'Save name':'Delete project'}{dialog.type==='new'&&<ArrowUpRight/>}</Button></div></form></div>}</Workspace>;}
+import { useEffect, useState, useRef, useCallback } from "react";
+import { useNavigate, Link } from "@tanstack/react-router";
+import {
+  Plus,
+  Upload,
+  Search,
+  Grid2X2,
+  List,
+  MoreHorizontal,
+  Box,
+  ArrowUpRight,
+  Sparkles,
+  FolderOpen,
+  Copy,
+  Trash2,
+  Pencil,
+  Download,
+  Lock,
+  ChevronRight,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Workspace } from "./Workspace";
+import { SceneCanvas } from "./SceneCanvas";
+import {
+  listProjects,
+  saveProject,
+  deleteProject,
+  newProject,
+  importProject,
+  exportProject,
+  download,
+  type Project,
+} from "@/lib/ar/projects";
+import banner from "@/assets/studio-banner.jpg";
+export const templates = ["Sculpture studio", "Geometric playground", "Material study"];
+export function Dashboard({ templatesOnly = false }: { templatesOnly?: boolean }) {
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [search, setSearch] = useState("");
+  const [sort, setSort] = useState("recent");
+  const [view, setView] = useState("grid");
+  const [filter, setFilter] = useState("all");
+  const [dialog, setDialog] = useState<{
+    type: "new" | "rename" | "delete";
+    project?: Project;
+  } | null>(null);
+  const [name, setName] = useState("");
+  const [menu, setMenu] = useState("");
+  const [error, setError] = useState("");
+  const input = useRef<HTMLInputElement>(null);
+  const navigate = useNavigate();
+  const reload = useCallback(
+    () =>
+      listProjects()
+        .then(setProjects)
+        .catch(() => setError("Unable to open local storage. Check your browser settings.")),
+    [],
+  );
+  useEffect(() => {
+    void reload();
+  }, [reload]);
+  const open = (id: string) => navigate({ to: "/editor/$projectId", params: { projectId: id } });
+  const create = async (template?: string) => {
+    try {
+      const p = newProject(template || name || "Untitled experience", template);
+      await saveProject(p);
+      open(p.id);
+    } catch {
+      setError("Project could not be saved. Export backups and check available browser storage.");
+    }
+  };
+  const filtered = projects
+    .filter(
+      (p) =>
+        p.name.toLowerCase().includes(search.toLowerCase()) &&
+        (filter !== "recent" || Date.now() - p.updated < 7 * 86400000),
+    )
+    .sort((a, b) => (sort === "name" ? a.name.localeCompare(b.name) : b.updated - a.updated));
+  const backup = () =>
+    download(
+      new Blob([JSON.stringify({ format: "addis-ar-backup", projects })], {
+        type: "application/json",
+      }),
+      "addis-ar-backup.json",
+    );
+  return (
+    <Workspace page={templatesOnly ? "Templates" : "My projects"}>
+      <main className="main-content">
+        <div className="page-heading">
+          <div>
+            <h1>{templatesOnly ? "Start with a little inspiration." : "My projects"}</h1>
+            <p>
+              {templatesOnly
+                ? "A starting point for your next dimension."
+                : "Your ideas, in a whole new dimension."}
+            </p>
+          </div>
+          <div className="project-heading-actions">
+            <Button variant="outline" onClick={() => input.current?.click()}>
+              <Upload />
+              Import project
+            </Button>
+            <Button
+              onClick={() => {
+                setName("");
+                setDialog({ type: "new" });
+              }}
+            >
+              <Plus />
+              New project
+            </Button>
+          </div>
+        </div>
+        <input
+          ref={input}
+          type="file"
+          accept=".addisar,.json"
+          hidden
+          onChange={async (e) => {
+            const f = e.target.files?.[0];
+            if (!f) return;
+            try {
+              const json = JSON.parse(await f.text());
+              if (json.format === "addis-ar-backup" && Array.isArray(json.projects)) {
+                for (const entry of json.projects) {
+                  const p = await importProject(
+                    new File([JSON.stringify(entry)], "project.addisar"),
+                  );
+                  await saveProject(p);
+                }
+                await reload();
+              } else {
+                const p = await importProject(f);
+                await saveProject(p);
+                await reload();
+              }
+            } catch {
+              setError("This is not a valid Addis AR project or backup.");
+            }
+            e.target.value = "";
+          }}
+        />
+        {error && (
+          <div role="alert" className="mb-5 text-destructive">
+            {error}
+            <Button variant="ghost" size="sm" onClick={() => setError("")}>
+              Dismiss
+            </Button>
+          </div>
+        )}
+        {!templatesOnly && (
+          <>
+            <section className="studio-banner">
+              <img
+                src={banner}
+                alt="Glass and chrome 3D shapes in a creative studio"
+                width={1536}
+                height={512}
+              />
+              <div className="banner-content">
+                <div className="eyebrow">
+                  <Sparkles size={13} />
+                  MAKE ROOM FOR YOUR IMAGINATION
+                </div>
+                <h2>
+                  Small ideas.
+                  <br />
+                  Extraordinary dimensions.
+                </h2>
+                <p>Create something the world hasn’t seen before.</p>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => {
+                    setName("");
+                    setDialog({ type: "new" });
+                  }}
+                >
+                  Create an experience
+                  <ArrowUpRight />
+                </Button>
+              </div>
+            </section>
+            <div className="section-title">
+              <h2>
+                Your projects<span className="count">{projects.length}</span>
+              </h2>
+              <Button variant="ghost" size="sm" onClick={backup} disabled={!projects.length}>
+                <Download />
+                Back up all
+              </Button>
+            </div>
+            <div className="filters">
+              <div className="filter-tabs">
+                <Button
+                  size="sm"
+                  variant={filter === "all" ? "secondary" : "ghost"}
+                  onClick={() => setFilter("all")}
+                >
+                  All projects
+                </Button>
+                <Button
+                  size="sm"
+                  variant={filter === "recent" ? "secondary" : "ghost"}
+                  onClick={() => setFilter("recent")}
+                >
+                  Recently edited
+                </Button>
+              </div>
+              <div className="filter-right">
+                <div className="searchbox">
+                  <Search size={14} />
+                  <input
+                    aria-label="Search projects"
+                    placeholder="Search projects…"
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                  />
+                </div>
+                <select
+                  aria-label="Sort projects"
+                  value={sort}
+                  onChange={(e) => setSort(e.target.value)}
+                >
+                  <option value="recent">Last modified</option>
+                  <option value="name">Name A–Z</option>
+                </select>
+                <div className="view-toggle">
+                  <Button
+                    aria-label="Grid view"
+                    title="Grid view"
+                    variant="ghost"
+                    size="icon"
+                    className={view === "grid" ? "active" : ""}
+                    onClick={() => setView("grid")}
+                  >
+                    <Grid2X2 />
+                  </Button>
+                  <Button
+                    aria-label="List view"
+                    title="List view"
+                    variant="ghost"
+                    size="icon"
+                    className={view === "list" ? "active" : ""}
+                    onClick={() => setView("list")}
+                  >
+                    <List />
+                  </Button>
+                </div>
+              </div>
+            </div>
+            <div className={`project-grid ${view === "list" ? "list-view" : ""}`}>
+              {filtered.map((p) => (
+                <article className="project-card" key={p.id}>
+                  <div
+                    className="project-visual"
+                    onClick={() => open(p.id)}
+                    role="link"
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") open(p.id);
+                    }}
+                    aria-label={`Open ${p.name}`}
+                  >
+                    <div className="mode-badge">
+                      <Box size={10} />
+                      3D experience
+                    </div>
+                    <div className="thumbnail-canvas">
+                      <SceneCanvas objects={p.objects} thumbnail />
+                    </div>
+                  </div>
+                  <div className="project-meta">
+                    <div>
+                      <h3>{p.name}</h3>
+                      <p>
+                        <FolderOpen size={10} />
+                        Local draft<span>·</span>
+                        {new Date(p.updated).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                        })}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={`Options for ${p.name}`}
+                      onClick={() => setMenu(menu === p.id ? "" : p.id)}
+                    >
+                      <MoreHorizontal />
+                    </Button>
+                  </div>
+                  {menu === p.id && (
+                    <div className="card-menu">
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setName(p.name);
+                          setDialog({ type: "rename", project: p });
+                          setMenu("");
+                        }}
+                      >
+                        <Pencil />
+                        Rename
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={async () => {
+                          await saveProject({
+                            ...p,
+                            id: crypto.randomUUID(),
+                            name: p.name + " copy",
+                            updated: Date.now(),
+                          });
+                          setMenu("");
+                          reload();
+                        }}
+                      >
+                        <Copy />
+                        Duplicate
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          exportProject(p);
+                          setMenu("");
+                        }}
+                      >
+                        <Download />
+                        Export
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        onClick={() => {
+                          setDialog({ type: "delete", project: p });
+                          setMenu("");
+                        }}
+                      >
+                        <Trash2 />
+                        Delete
+                      </Button>
+                    </div>
+                  )}
+                </article>
+              ))}
+              <Button
+                variant="ghost"
+                className="new-card"
+                onClick={() => {
+                  setName("");
+                  setDialog({ type: "new" });
+                }}
+              >
+                <span className="plus-box">
+                  <Plus size={22} />
+                </span>
+                <h3>Create a new project</h3>
+                <p>A blank canvas. Endless possibilities.</p>
+              </Button>
+            </div>
+            {!filtered.length && search && (
+              <p className="project-empty">No projects match “{search}”.</p>
+            )}
+          </>
+        )}
+        <section className="template-section">
+          <div className="section-title">
+            <h2>{templatesOnly ? "3D starter templates" : "A head start for your next idea"}</h2>
+            {!templatesOnly && (
+              <Button variant="ghost" size="sm" asChild>
+                <Link to="/templates">
+                  Browse templates
+                  <ChevronRight />
+                </Link>
+              </Button>
+            )}
+          </div>
+          <div className="template-grid">
+            {templates.map((t, i) => (
+              <Button key={t} variant="ghost" className="template-card" onClick={() => create(t)}>
+                <div className="template-preview">
+                  <SceneCanvas objects={newProject(t, t).objects} thumbnail />
+                </div>
+                <div>
+                  <h3>{t}</h3>
+                  <p>
+                    {
+                      [
+                        "A form worth exploring",
+                        "Play with shape and space",
+                        "Find your perfect finish",
+                      ][i]
+                    }
+                  </p>
+                </div>
+                <ArrowUpRight className="ml-auto text-muted-foreground" />
+              </Button>
+            ))}
+          </div>
+        </section>
+        <div className="bottom-note">
+          <Lock size={11} />
+          Free to create. No account. No API keys. Just your imagination.
+        </div>
+      </main>
+      {dialog && (
+        <div className="dialog-scrim" onClick={() => setDialog(null)}>
+          <form
+            className="dialog-box"
+            role="dialog"
+            aria-modal="true"
+            aria-label={
+              dialog.type === "new"
+                ? "New project"
+                : dialog.type === "rename"
+                  ? "Rename project"
+                  : "Delete project"
+            }
+            onClick={(e) => e.stopPropagation()}
+            onSubmit={async (e) => {
+              e.preventDefault();
+              if (dialog.type === "new") await create();
+              else if (dialog.project) {
+                if (dialog.type === "delete") await deleteProject(dialog.project.id);
+                else
+                  await saveProject({
+                    ...dialog.project,
+                    name: name.trim() || dialog.project.name,
+                    updated: Date.now(),
+                  });
+                await reload();
+              }
+              setDialog(null);
+            }}
+          >
+            <h2>
+              {dialog.type === "new"
+                ? "A new dimension starts here."
+                : dialog.type === "rename"
+                  ? "Rename project"
+                  : "Delete this project?"}
+            </h2>
+            {dialog.type === "delete" ? (
+              <p>
+                “{dialog.project?.name}” will be removed from this device. Export a backup first if
+                you want to keep it.
+              </p>
+            ) : (
+              <>
+                <label htmlFor="project-name">Project name</label>
+                <input
+                  id="project-name"
+                  autoFocus
+                  required
+                  maxLength={120}
+                  placeholder="Untitled experience"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                />
+                <p>3D preview · Stored on this device</p>
+              </>
+            )}
+            <div className="dialog-actions">
+              <Button type="button" variant="ghost" onClick={() => setDialog(null)}>
+                Cancel
+              </Button>
+              <Button type="submit" variant={dialog.type === "delete" ? "destructive" : "default"}>
+                {dialog.type === "new"
+                  ? "Create project"
+                  : dialog.type === "rename"
+                    ? "Save name"
+                    : "Delete project"}
+                {dialog.type === "new" && <ArrowUpRight />}
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
+    </Workspace>
+  );
+}
