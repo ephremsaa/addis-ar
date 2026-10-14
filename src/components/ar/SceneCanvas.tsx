@@ -6,7 +6,7 @@ import {
   Lightformer,
   Grid,
 } from "@react-three/drei";
-import { useMemo, useRef, useState, useEffect, createElement } from "react";
+import { useMemo, useRef, useState, useEffect } from "react";
 import * as THREE from "three";
 import { toast } from "sonner";
 import { buildObject } from "@/lib/ar/scene";
@@ -123,7 +123,7 @@ export function SceneCanvas({
   return (
     <Canvas
       dpr={1}
-      camera={{ position: thumbnail ? [4, 3, 5] : [5, 4, 7], fov: thumbnail ? 38 : 45 }}
+      camera={{ position: thumbnail ? [4, 3, 5] : [7, 6, 11], fov: thumbnail ? 38 : 60 }}
       gl={{ preserveDrawingBuffer: true }}
     >
       <color attach="background" args={[colors.background]} />
