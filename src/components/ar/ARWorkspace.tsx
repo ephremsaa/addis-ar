@@ -150,7 +150,7 @@ export function ARWorkspace({
 
   const handleSwitchFacing = async () => {
     try {
-      sessionManager.camera.switchFacing();
+      await sessionManager.camera.toggleFacingMode();
       setFeedbackMessage('Switched camera.');
     } catch {
       setFeedbackMessage('Could not switch camera.');
@@ -906,7 +906,11 @@ export function ARWorkspace({
                         <select
                           aria-label="Select Camera Device"
                           value={sessionState.selectedCameraId}
-                          onChange={(e) => sessionManager.camera.selectDevice(e.target.value)}
+                          onChange={(e) => {
+                            void sessionManager.camera.switchCamera(e.target.value).catch(() => {
+                              setFeedbackMessage('Failed to switch to the selected camera device.');
+                            });
+                          }}
                           className="w-full bg-black/60 border border-white/20 rounded-lg px-2.5 py-1.5 text-xs text-white"
                         >
                           {sessionState.availableCameras.map((cam) => (
