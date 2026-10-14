@@ -34,7 +34,7 @@ describe("Local-first projects", () => {
     vi.useFakeTimers();
     vi.stubGlobal("URL", { createObjectURL: vi.fn(() => "blob:download"), revokeObjectURL: vi.fn() });
     let attached = false;
-    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function () {
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (this: HTMLAnchorElement) {
       attached = document.body.contains(this);
     });
     try {
