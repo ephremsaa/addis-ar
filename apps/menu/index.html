@@ -1,0 +1,1091 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Lumen AR Bistro - Mobile Menu</title>
+  <style>
+    :root {
+      --primary: #f59e0b;
+      --primary-light: #fbbf24;
+      --accent: #ef4444;
+      --bg: #090d16;
+      --sheet-bg: rgba(18, 24, 38, 0.94);
+      --card-bg: rgba(30, 41, 59, 0.75);
+      --border: rgba(255, 255, 255, 0.1);
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      user-select: none;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    }
+
+    /* 3D Canvas container */
+    #canvas-container {
+      position: absolute;
+      inset: 0;
+      z-index: 1;
+      touch-action: none;
+    }
+
+    /* Top Bar - Mobile First */
+    .top-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: calc(10px + env(safe-area-inset-top)) 16px 12px 16px;
+      background: linear-gradient(180deg, rgba(9, 13, 22, 0.92) 0%, rgba(9, 13, 22, 0.4) 75%, transparent 100%);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .brand-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .brand-icon {
+      font-size: 1.3rem;
+      background: rgba(245, 158, 11, 0.15);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      width: 38px;
+      height: 38px;
+      border-radius: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .brand-text h1 {
+      font-size: 1.05rem;
+      font-weight: 800;
+      letter-spacing: -0.3px;
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .brand-text span {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      display: block;
+      margin-top: -1px;
+    }
+
+    /* Mode Segmented Switch */
+    .segmented-control {
+      display: flex;
+      background: rgba(30, 41, 59, 0.8);
+      border: 1px solid var(--border);
+      border-radius: 24px;
+      padding: 3px;
+    }
+
+    .seg-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 0.78rem;
+      font-weight: 700;
+      padding: 6px 12px;
+      border-radius: 20px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+    }
+
+    .seg-btn.active {
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      color: #1a0b02;
+      box-shadow: 0 2px 8px rgba(245, 158, 11, 0.4);
+    }
+
+    .icon-btn {
+      width: 38px;
+      height: 38px;
+      border-radius: 50%;
+      background: rgba(30, 41, 59, 0.85);
+      border: 1px solid var(--border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1.05rem;
+      cursor: pointer;
+      position: relative;
+    }
+
+    .cart-badge {
+      position: absolute;
+      top: -3px;
+      right: -3px;
+      background: var(--accent);
+      color: #fff;
+      font-size: 0.65rem;
+      font-weight: 800;
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid #090d16;
+    }
+
+    /* AR Status Pill */
+    .ar-pill {
+      position: absolute;
+      top: calc(64px + env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 15;
+      background: rgba(18, 24, 38, 0.9);
+      border: 1px solid var(--border);
+      border-radius: 30px;
+      padding: 6px 14px;
+      font-size: 0.78rem;
+      font-weight: 600;
+      display: none;
+      align-items: center;
+      gap: 8px;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 16px rgba(0,0,0,0.4);
+    }
+
+    .pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #ef4444;
+      animation: pulse 1.4s infinite;
+    }
+
+    .pill-dot.active {
+      background: #10b981;
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 0.3; transform: scale(0.9); }
+      50% { opacity: 1; transform: scale(1.1); }
+    }
+
+    /* Floating Side Quick Tools */
+    .floating-tools {
+      position: absolute;
+      right: 14px;
+      top: 45%;
+      transform: translateY(-50%);
+      z-index: 18;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .fab {
+      width: 42px;
+      height: 42px;
+      border-radius: 50%;
+      background: rgba(18, 24, 38, 0.85);
+      border: 1px solid var(--border);
+      color: var(--text);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 1rem;
+      cursor: pointer;
+      backdrop-filter: blur(10px);
+      box-shadow: 0 4px 12px rgba(0,0,0,0.35);
+      transition: all 0.2s;
+    }
+
+    .fab:active, .fab.active {
+      background: var(--primary);
+      color: #000;
+      border-color: var(--primary);
+      transform: scale(0.95);
+    }
+
+    /* Bottom Interactive Menu Sheet */
+    .bottom-sheet {
+      position: absolute;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      background: var(--sheet-bg);
+      border-top: 1px solid var(--border);
+      border-radius: 24px 24px 0 0;
+      padding: 14px 16px calc(14px + env(safe-area-inset-bottom)) 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      box-shadow: 0 -8px 30px rgba(0,0,0,0.5);
+    }
+
+    /* Dish Carousel */
+    .dish-row {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      padding-bottom: 2px;
+      scrollbar-width: none;
+      scroll-snap-type: x mandatory;
+    }
+
+    .dish-row::-webkit-scrollbar {
+      display: none;
+    }
+
+    .dish-chip {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border);
+      border-radius: 20px;
+      padding: 8px 14px;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      scroll-snap-align: start;
+      transition: all 0.2s;
+      flex-shrink: 0;
+    }
+
+    .dish-chip.active {
+      background: rgba(245, 158, 11, 0.2);
+      border-color: var(--primary);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    /* Active Dish Summary Card */
+    .dish-card {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--border);
+      border-radius: 18px;
+      padding: 12px 14px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .dish-meta {
+      flex: 1;
+      overflow: hidden;
+    }
+
+    .dish-headline {
+      display: flex;
+      align-items: baseline;
+      gap: 8px;
+    }
+
+    .dish-name {
+      font-size: 1rem;
+      font-weight: 800;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .dish-price {
+      font-size: 1.05rem;
+      font-weight: 800;
+      color: var(--primary);
+      flex-shrink: 0;
+    }
+
+    .dish-badges {
+      display: flex;
+      gap: 6px;
+      margin-top: 4px;
+      align-items: center;
+    }
+
+    .badge {
+      font-size: 0.68rem;
+      font-weight: 600;
+      padding: 2px 7px;
+      border-radius: 6px;
+      background: rgba(255, 255, 255, 0.08);
+      color: #cbd5e1;
+    }
+
+    .badge-kcal {
+      background: rgba(56, 189, 248, 0.15);
+      color: #38bdf8;
+    }
+
+    /* Big Thumb Order Button */
+    .btn-add {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      border: none;
+      color: #1a0b02;
+      font-size: 0.92rem;
+      font-weight: 800;
+      padding: 12px 18px;
+      border-radius: 16px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-shrink: 0;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+      transition: all 0.15s;
+    }
+
+    .btn-add:active {
+      transform: scale(0.96);
+    }
+
+    /* Modals - Bottom Sheet on Mobile */
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      z-index: 50;
+      background: rgba(0, 0, 0, 0.75);
+      backdrop-filter: blur(8px);
+      align-items: flex-end;
+      justify-content: center;
+    }
+
+    .modal.active {
+      display: flex;
+    }
+
+    .modal-sheet {
+      background: #161e2e;
+      border-top: 1px solid var(--border);
+      border-radius: 28px 28px 0 0;
+      width: 100%;
+      max-width: 480px;
+      padding: 20px 20px calc(20px + env(safe-area-inset-bottom)) 20px;
+      text-align: center;
+      animation: slideUp 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+      position: relative;
+    }
+
+    @keyframes slideUp {
+      from { transform: translateY(100%); }
+      to { transform: translateY(0); }
+    }
+
+    .sheet-handle {
+      width: 40px;
+      height: 4px;
+      background: rgba(255, 255, 255, 0.2);
+      border-radius: 2px;
+      margin: 0 auto 16px auto;
+    }
+
+    .modal-sheet h3 {
+      font-size: 1.15rem;
+      margin-bottom: 6px;
+    }
+
+    .modal-sheet img {
+      max-width: 220px;
+      width: 100%;
+      border-radius: 12px;
+      border: 4px solid #fff;
+      margin: 14px 0;
+    }
+
+    /* Cart Items */
+    .cart-items {
+      max-height: 220px;
+      overflow-y: auto;
+      text-align: left;
+      margin: 14px 0;
+    }
+
+    .cart-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 10px 0;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      font-size: 0.92rem;
+    }
+
+    .cart-sum {
+      display: flex;
+      justify-content: space-between;
+      font-size: 1.15rem;
+      font-weight: 800;
+      color: var(--primary);
+      margin: 14px 0;
+    }
+
+    .btn-checkout {
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, #f59e0b, #d97706);
+      border: none;
+      border-radius: 16px;
+      color: #1a0b02;
+      font-size: 1rem;
+      font-weight: 800;
+      cursor: pointer;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      top: calc(64px + env(safe-area-inset-top));
+      left: 50%;
+      transform: translateX(-50%) translateY(-20px);
+      background: #10b981;
+      color: #fff;
+      padding: 9px 18px;
+      border-radius: 24px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      z-index: 100;
+      opacity: 0;
+      pointer-events: none;
+      transition: all 0.25s ease;
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+  </style>
+
+  <!-- Libraries -->
+  <script src="../../three.js/examples/vendor/three.js/build/three.min.js"></script>
+  <script src="../../three.js/examples/vendor/three.js/examples/js/controls/OrbitControls.js"></script>
+  <script src="../../three.js/build/ar.js"></script>
+</head>
+<body>
+
+  <!-- 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Top Navigation -->
+  <header class="top-bar">
+    <div class="brand-group">
+      <div class="brand-icon">🍽️</div>
+      <div class="brand-text">
+        <h1>LUMEN AR</h1>
+        <span>Table #12</span>
+      </div>
+    </div>
+
+    <!-- Segmented Mode Control -->
+    <div class="segmented-control">
+      <button class="seg-btn active" id="btn-studio">
+        <span>👁️ 3D</span>
+      </button>
+      <button class="seg-btn" id="btn-ar">
+        <span>📷 AR</span>
+      </button>
+    </div>
+
+    <div style="display:flex; gap:6px;">
+      <button class="icon-btn" id="btn-show-marker" title="Target Marker">
+        <span>🎯</span>
+      </button>
+      <button class="icon-btn" id="btn-show-cart" title="Order Tray">
+        <span>🛒</span>
+        <div class="cart-badge" id="cart-count">0</div>
+      </button>
+    </div>
+  </header>
+
+  <!-- AR Status Pill -->
+  <div class="ar-pill" id="ar-status-pill">
+    <div class="pill-dot" id="pill-dot"></div>
+    <span id="pill-text">Point camera at Hiro marker</span>
+  </div>
+
+  <!-- Floating Quick Actions -->
+  <aside class="floating-tools">
+    <button class="fab active" id="fab-spin" title="Auto Spin">🔄</button>
+    <button class="fab" id="fab-zoom-in" title="Zoom In">➕</button>
+    <button class="fab" id="fab-zoom-out" title="Zoom Out">➖</button>
+  </aside>
+
+  <!-- Bottom Drawer Menu -->
+  <footer class="bottom-sheet">
+    <!-- Horizontal Dish Selector -->
+    <div class="dish-row" id="dish-row">
+      <button class="dish-chip active" data-dish="burger">🍔 Wagyu Burger</button>
+      <button class="dish-chip" data-dish="pizza">🍕 Truffle Pizza</button>
+      <button class="dish-chip" data-dish="ramen">🍜 Shoyu Ramen</button>
+      <button class="dish-chip" data-dish="boba">🧋 Matcha Boba</button>
+      <button class="dish-chip" data-dish="cake">🍰 Lava Cake</button>
+    </div>
+
+    <!-- Active Dish Info & Thumb Action -->
+    <div class="dish-card">
+      <div class="dish-meta">
+        <div class="dish-headline">
+          <span class="dish-name" id="dish-name">The Royal Wagyu Burger</span>
+          <span class="dish-price" id="dish-price">$18.50</span>
+        </div>
+        <div class="dish-badges">
+          <span class="badge badge-kcal" id="dish-kcal">🔥 720 kcal</span>
+          <span class="badge" id="dish-badge">Chef's Signature</span>
+        </div>
+      </div>
+
+      <button class="btn-add" id="btn-order">
+        <span>Add</span>
+        <span>➕</span>
+      </button>
+    </div>
+  </footer>
+
+  <!-- Target Marker Modal -->
+  <div class="modal" id="marker-modal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <h3>🎯 Target Marker</h3>
+      <p style="color:var(--text-muted); font-size:0.85rem;">
+        In AR Mode, point your camera at this marker on your table or screen:
+      </p>
+      <img src="../../data/images/HIRO.jpg" alt="Hiro Marker">
+      <button class="btn-checkout" id="close-marker-btn" style="background:#334155; color:#fff;">
+        Got it!
+      </button>
+    </div>
+  </div>
+
+  <!-- Cart Modal -->
+  <div class="modal" id="cart-modal">
+    <div class="modal-sheet">
+      <div class="sheet-handle"></div>
+      <h3>🛒 Your Table Order</h3>
+      <div class="cart-items" id="cart-items">
+        <div style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:18px;">
+          Your order tray is currently empty.
+        </div>
+      </div>
+      <div class="cart-sum">
+        <span>Total:</span>
+        <span id="cart-total-val">$0.00</span>
+      </div>
+      <button class="btn-checkout" id="btn-submit-order">
+        🚀 Send Order to Kitchen
+      </button>
+    </div>
+  </div>
+
+  <!-- Toast Notification -->
+  <div class="toast" id="toast">Added to order!</div>
+
+  <script>
+    // --- DISH DATA ---
+    const DISHES = {
+      burger: {
+        name: 'Royal Wagyu Burger',
+        price: 18.50,
+        kcal: '720 kcal',
+        badge: "Chef's Signature",
+        scale: 0.85,
+        builder: buildBurger
+      },
+      pizza: {
+        name: 'Artisan Truffle Pizza',
+        price: 22.00,
+        kcal: '860 kcal',
+        badge: 'Wood-Fired',
+        scale: 0.8,
+        builder: buildPizza
+      },
+      ramen: {
+        name: 'Tokyo Shoyu Ramen',
+        price: 16.00,
+        kcal: '640 kcal',
+        badge: 'Slow Simmered',
+        scale: 0.85,
+        builder: buildRamen
+      },
+      boba: {
+        name: 'Uji Matcha Boba',
+        price: 7.50,
+        kcal: '340 kcal',
+        badge: 'Organic Matcha',
+        scale: 0.9,
+        builder: buildBoba
+      },
+      cake: {
+        name: 'Molten Lava Cake',
+        price: 11.50,
+        kcal: '490 kcal',
+        badge: 'Valrhona Chocolate',
+        scale: 0.9,
+        builder: buildCake
+      }
+    };
+
+    let activeDish = 'burger';
+    let isAR = false;
+    let autoSpin = true;
+    let zoomLevel = 1.0;
+    let cart = [];
+
+    // --- THREE.JS ENGINE SETUP ---
+    const container = document.getElementById('canvas-container');
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.shadowMap.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+
+    // Studio Camera
+    const studioCam = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 100);
+    studioCam.position.set(0, 1.6, 2.9);
+
+    // AR Camera
+    const arCam = new THREE.Camera();
+    scene.add(arCam);
+
+    let activeCam = studioCam;
+
+    // Orbit Controls
+    const controls = new THREE.OrbitControls(studioCam, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.target.set(0, 0.35, 0);
+    controls.maxPolarAngle = Math.PI / 2 + 0.05;
+
+    // Lighting
+    const ambientLight = new THREE.AmbientLight(0xffffff, 0.9);
+    scene.add(ambientLight);
+
+    const dirLight = new THREE.DirectionalLight(0xfff7ed, 1.3);
+    dirLight.position.set(3, 8, 3);
+    dirLight.castShadow = true;
+    scene.add(dirLight);
+
+    const fillLight = new THREE.DirectionalLight(0x93c5fd, 0.4);
+    fillLight.position.set(-3, 3, -3);
+    scene.add(fillLight);
+
+    // Studio Pedestal Disc
+    const pedestal = new THREE.Mesh(
+      new THREE.CylinderGeometry(1.5, 1.6, 0.06, 40),
+      new THREE.MeshStandardMaterial({ color: 0x1e293b, roughness: 0.8 })
+    );
+    pedestal.position.y = -0.03;
+    scene.add(pedestal);
+
+    // Model Anchor Root
+    const modelRoot = new THREE.Group();
+    scene.add(modelRoot);
+
+    // --- AR.JS ENGINE ---
+    THREEx.ArToolkitContext.baseURL = '../../three.js/';
+    let arSource = null;
+    let arContext = null;
+    let arMarkerRoot = null;
+
+    function startAR() {
+      if (arSource) return;
+
+      arSource = new THREEx.ArToolkitSource({ sourceType: 'webcam' });
+      arSource.init(() => onResize());
+
+      arContext = new THREEx.ArToolkitContext({
+        cameraParametersUrl: '../../data/data/camera_para.dat',
+        detectionMode: 'mono'
+      });
+
+      arContext.init(() => {
+        arCam.projectionMatrix.copy(arContext.getProjectionMatrix());
+      });
+
+      arMarkerRoot = new THREE.Group();
+      scene.add(arMarkerRoot);
+
+      new THREEx.ArMarkerControls(arContext, arMarkerRoot, {
+        type: 'pattern',
+        patternUrl: '../../data/data/patt.hiro'
+      });
+    }
+
+    function switchMode(toAR) {
+      isAR = toAR;
+      const statusPill = document.getElementById('ar-status-pill');
+      const btnStudio = document.getElementById('btn-studio');
+      const btnAR = document.getElementById('btn-ar');
+
+      btnStudio.classList.toggle('active', !toAR);
+      btnAR.classList.toggle('active', toAR);
+
+      if (toAR) {
+        startAR();
+        activeCam = arCam;
+        controls.enabled = false;
+        pedestal.visible = false;
+        statusPill.style.display = 'flex';
+        if (arMarkerRoot) arMarkerRoot.add(modelRoot);
+      } else {
+        activeCam = studioCam;
+        controls.enabled = true;
+        pedestal.visible = true;
+        statusPill.style.display = 'none';
+        scene.add(modelRoot);
+        modelRoot.position.set(0, 0, 0);
+        modelRoot.rotation.set(0, 0, 0);
+      }
+    }
+
+    document.getElementById('btn-studio').addEventListener('click', () => switchMode(false));
+    document.getElementById('btn-ar').addEventListener('click', () => switchMode(true));
+
+    // --- 3D FOOD BUILDERS ---
+    function buildBurger() {
+      const g = new THREE.Group();
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.2, 1.1, 0.08, 36), new THREE.MeshStandardMaterial({ color: 0xf8fafc, roughness: 0.2 }));
+      g.add(plate);
+
+      const bunMat = new THREE.MeshStandardMaterial({ color: 0xd9822b, roughness: 0.6 });
+      const botBun = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.64, 0.18, 32), bunMat);
+      botBun.position.y = 0.15;
+      g.add(botBun);
+
+      const patty = new THREE.Mesh(new THREE.CylinderGeometry(0.72, 0.72, 0.18, 32), new THREE.MeshStandardMaterial({ color: 0x3e1f0e, roughness: 0.9 }));
+      patty.position.y = 0.32;
+      g.add(patty);
+
+      const cheese = new THREE.Mesh(new THREE.BoxGeometry(0.95, 0.04, 0.95), new THREE.MeshStandardMaterial({ color: 0xf59e0b, roughness: 0.4 }));
+      cheese.position.y = 0.42;
+      cheese.rotation.y = Math.PI / 4;
+      g.add(cheese);
+
+      const tomato = new THREE.Mesh(new THREE.CylinderGeometry(0.68, 0.68, 0.08, 32), new THREE.MeshStandardMaterial({ color: 0xd92d20, roughness: 0.3 }));
+      tomato.position.y = 0.48;
+      g.add(tomato);
+
+      const topBun = new THREE.Mesh(new THREE.SphereGeometry(0.72, 32, 16, 0, Math.PI * 2, 0, Math.PI / 2), bunMat);
+      topBun.scale.set(1, 0.65, 1);
+      topBun.position.y = 0.54;
+      g.add(topBun);
+      return g;
+    }
+
+    function buildPizza() {
+      const g = new THREE.Group();
+      const board = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.15, 0.06, 36), new THREE.MeshStandardMaterial({ color: 0xa16207, roughness: 0.7 }));
+      g.add(board);
+
+      const crust = new THREE.Mesh(new THREE.TorusGeometry(0.9, 0.09, 16, 36), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.8 }));
+      crust.rotation.x = Math.PI / 2;
+      crust.position.y = 0.08;
+      g.add(crust);
+
+      const sauce = new THREE.Mesh(new THREE.CylinderGeometry(0.88, 0.88, 0.03, 32), new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.4 }));
+      sauce.position.y = 0.06;
+      g.add(sauce);
+
+      const cheese = new THREE.Mesh(new THREE.CylinderGeometry(0.85, 0.85, 0.035, 32), new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.4 }));
+      cheese.position.y = 0.07;
+      g.add(cheese);
+
+      const pepMat = new THREE.MeshStandardMaterial({ color: 0x991b1b, roughness: 0.6 });
+      const pepGeo = new THREE.CylinderGeometry(0.14, 0.14, 0.02, 16);
+      [[0,0],[0.4,0.2],[-0.4,0.3],[0.3,-0.4],[-0.3,-0.3],[0.5,-0.1],[-0.5,-0.05]].forEach(([x,z]) => {
+        const p = new THREE.Mesh(pepGeo, pepMat);
+        p.position.set(x, 0.09, z);
+        g.add(p);
+      });
+      return g;
+    }
+
+    function buildRamen() {
+      const g = new THREE.Group();
+      const bowl = new THREE.Mesh(new THREE.CylinderGeometry(1.0, 0.5, 0.8, 36, 1, true), new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 }));
+      bowl.position.y = 0.45;
+      g.add(bowl);
+
+      const base = new THREE.Mesh(new THREE.CylinderGeometry(0.52, 0.5, 0.1, 36), new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 }));
+      base.position.y = 0.05;
+      g.add(base);
+
+      const broth = new THREE.Mesh(new THREE.CylinderGeometry(0.92, 0.92, 0.04, 36), new THREE.MeshStandardMaterial({ color: 0xd97706, roughness: 0.1 }));
+      broth.position.y = 0.72;
+      g.add(broth);
+
+      const noodles = new THREE.Mesh(new THREE.TorusKnotGeometry(0.5, 0.06, 48, 12, 2, 3), new THREE.MeshStandardMaterial({ color: 0xfef08a, roughness: 0.6 }));
+      noodles.rotation.x = Math.PI / 2;
+      noodles.scale.set(1, 1, 0.25);
+      noodles.position.set(0, 0.73, 0);
+      g.add(noodles);
+
+      const egg = new THREE.Mesh(new THREE.SphereGeometry(0.22, 16, 16), new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.4 }));
+      egg.scale.set(1, 0.4, 1.3);
+      egg.position.set(0.35, 0.76, 0.2);
+      g.add(egg);
+
+      const yolk = new THREE.Mesh(new THREE.SphereGeometry(0.11, 16, 16), new THREE.MeshStandardMaterial({ color: 0xf97316, roughness: 0.2 }));
+      yolk.scale.set(1, 0.3, 1);
+      yolk.position.set(0.35, 0.78, 0.2);
+      g.add(yolk);
+      return g;
+    }
+
+    function buildBoba() {
+      const g = new THREE.Group();
+      const cupMat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.05, transparent: true, opacity: 0.35 });
+      const cup = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.36, 1.35, 32, 1, true), cupMat);
+      cup.position.y = 0.7;
+      g.add(cup);
+
+      const bobaMat = new THREE.MeshStandardMaterial({ color: 0x1f140e, roughness: 0.2 });
+      const bobaGeo = new THREE.SphereGeometry(0.065, 10, 10);
+      for (let i = 0; i < 22; i++) {
+        const p = new THREE.Mesh(bobaGeo, bobaMat);
+        const r = Math.random() * 0.26;
+        const th = Math.random() * Math.PI * 2;
+        p.position.set(Math.cos(th) * r, 0.1 + Math.random() * 0.18, Math.sin(th) * r);
+        g.add(p);
+      }
+
+      const milk = new THREE.Mesh(new THREE.CylinderGeometry(0.43, 0.38, 0.5, 32), new THREE.MeshStandardMaterial({ color: 0xfaf5ff, roughness: 0.5 }));
+      milk.position.y = 0.48;
+      g.add(milk);
+
+      const matcha = new THREE.Mesh(new THREE.CylinderGeometry(0.47, 0.43, 0.55, 32), new THREE.MeshStandardMaterial({ color: 0x4d7c0f, roughness: 0.6 }));
+      matcha.position.y = 0.98;
+      g.add(matcha);
+
+      const straw = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1.7, 16), new THREE.MeshStandardMaterial({ color: 0xef4444, roughness: 0.3 }));
+      straw.position.set(0.12, 0.9, 0.08);
+      straw.rotation.z = -0.15;
+      g.add(straw);
+      return g;
+    }
+
+    function buildCake() {
+      const g = new THREE.Group();
+      const plate = new THREE.Mesh(new THREE.CylinderGeometry(1.15, 1.05, 0.06, 36), new THREE.MeshStandardMaterial({ color: 0x0f172a, roughness: 0.2 }));
+      g.add(plate);
+
+      const cake = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.68, 0.48, 32), new THREE.MeshStandardMaterial({ color: 0x2b1810, roughness: 0.9 }));
+      cake.position.y = 0.28;
+      g.add(cake);
+
+      const lava = new THREE.Mesh(new THREE.CylinderGeometry(0.48, 0.52, 0.08, 32), new THREE.MeshStandardMaterial({ color: 0x170a05, roughness: 0.1 }));
+      lava.position.y = 0.53;
+      g.add(lava);
+
+      const berry = new THREE.Mesh(new THREE.SphereGeometry(0.09, 12, 12), new THREE.MeshStandardMaterial({ color: 0xbe123c, roughness: 0.4 }));
+      berry.position.set(0.05, 0.64, 0.05);
+      g.add(berry);
+      return g;
+    }
+
+    // --- RENDER CURRENT DISH ---
+    let currentMesh = null;
+
+    function renderDish(key) {
+      activeDish = key;
+      const data = DISHES[key];
+      if (!data) return;
+
+      document.getElementById('dish-name').textContent = data.name;
+      document.getElementById('dish-price').textContent = `$${data.price.toFixed(2)}`;
+      document.getElementById('dish-kcal').textContent = `🔥 ${data.kcal}`;
+      document.getElementById('dish-badge').textContent = data.badge;
+
+      document.querySelectorAll('.dish-chip').forEach(c => {
+        c.classList.toggle('active', c.dataset.dish === key);
+      });
+
+      if (currentMesh) modelRoot.remove(currentMesh);
+      currentMesh = data.builder();
+      modelRoot.add(currentMesh);
+
+      applyScale();
+    }
+
+    function applyScale() {
+      if (!currentMesh) return;
+      const s = DISHES[activeDish].scale * zoomLevel;
+      currentMesh.scale.set(s, s, s);
+    }
+
+    document.querySelectorAll('.dish-chip').forEach(c => {
+      c.addEventListener('click', () => renderDish(c.dataset.dish));
+    });
+
+    // --- QUICK TOOLS ---
+    const fabSpin = document.getElementById('fab-spin');
+    fabSpin.addEventListener('click', () => {
+      autoSpin = !autoSpin;
+      fabSpin.classList.toggle('active', autoSpin);
+    });
+
+    document.getElementById('fab-zoom-in').addEventListener('click', () => {
+      zoomLevel = Math.min(zoomLevel + 0.15, 2.0);
+      applyScale();
+    });
+
+    document.getElementById('fab-zoom-out').addEventListener('click', () => {
+      zoomLevel = Math.max(zoomLevel - 0.15, 0.5);
+      applyScale();
+    });
+
+    // --- CART SYSTEM ---
+    const toast = document.getElementById('toast');
+    function showToast(msg) {
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2000);
+    }
+
+    document.getElementById('btn-order').addEventListener('click', () => {
+      const d = DISHES[activeDish];
+      const match = cart.find(i => i.id === activeDish);
+      if (match) match.qty += 1;
+      else cart.push({ id: activeDish, name: d.name, price: d.price, qty: 1 });
+
+      const totalCount = cart.reduce((acc, c) => acc + c.qty, 0);
+      document.getElementById('cart-count').textContent = totalCount;
+      showToast(`Added ${d.name} to order!`);
+    });
+
+    const cartModal = document.getElementById('cart-modal');
+    document.getElementById('btn-show-cart').addEventListener('click', () => {
+      renderCartUI();
+      cartModal.classList.add('active');
+    });
+
+    function renderCartUI() {
+      const container = document.getElementById('cart-items');
+      const totalEl = document.getElementById('cart-total-val');
+
+      if (cart.length === 0) {
+        container.innerHTML = `<div style="color:var(--text-muted); font-size:0.9rem; text-align:center; padding:18px;">Your order tray is currently empty.</div>`;
+        totalEl.textContent = '$0.00';
+        return;
+      }
+
+      let sum = 0;
+      container.innerHTML = '';
+      cart.forEach(item => {
+        const line = item.price * item.qty;
+        sum += line;
+        container.innerHTML += `
+          <div class="cart-row">
+            <div><strong>${item.name}</strong> × ${item.qty}</div>
+            <div>$${line.toFixed(2)}</div>
+          </div>
+        `;
+      });
+      totalEl.textContent = `$${sum.toFixed(2)}`;
+    }
+
+    document.getElementById('btn-submit-order').addEventListener('click', () => {
+      if (cart.length === 0) return;
+      cart = [];
+      document.getElementById('cart-count').textContent = '0';
+      cartModal.classList.remove('active');
+      showToast('🚀 Order transmitted to kitchen!');
+    });
+
+    // Marker Modal
+    const markerModal = document.getElementById('marker-modal');
+    document.getElementById('btn-show-marker').addEventListener('click', () => {
+      markerModal.classList.add('active');
+    });
+    document.getElementById('close-marker-btn').addEventListener('click', () => {
+      markerModal.classList.remove('active');
+    });
+
+    [cartModal, markerModal].forEach(m => {
+      m.addEventListener('click', (e) => {
+        if (e.target === m) m.classList.remove('active');
+      });
+    });
+
+    // --- RESIZE ---
+    window.addEventListener('resize', onResize);
+    function onResize() {
+      studioCam.aspect = window.innerWidth / window.innerHeight;
+      studioCam.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+
+      if (arSource && isAR) {
+        arSource.onResizeElement();
+        arSource.copyElementSizeTo(renderer.domElement);
+        if (arContext && arContext.arController !== null) {
+          arSource.copyElementSizeTo(arContext.arController.canvas);
+        }
+      }
+    }
+
+    // --- LOOP ---
+    const pillDot = document.getElementById('pill-dot');
+    const pillText = document.getElementById('pill-text');
+
+    function animate() {
+      requestAnimationFrame(animate);
+
+      if (isAR && arSource && arSource.ready) {
+        arContext.update(arSource.domElement);
+        if (arMarkerRoot) {
+          if (arMarkerRoot.visible) {
+            pillDot.classList.add('active');
+            pillText.textContent = 'Marker Detected! Food Anchored';
+          } else {
+            pillDot.classList.remove('active');
+            pillText.textContent = 'Point camera at Hiro marker';
+          }
+        }
+      }
+
+      if (autoSpin && modelRoot) {
+        modelRoot.rotation.y += 0.008;
+      }
+
+      if (!isAR) {
+        controls.update();
+      }
+
+      renderer.render(scene, activeCam);
+    }
+
+    // Start with burger in studio mode
+    renderDish('burger');
+    switchMode(false);
+    animate();
+  </script>
+</body>
+</html>

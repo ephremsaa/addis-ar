@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>AR.js WebXR Portal - Mobile</title>
+  <style>
+    :root {
+      --bg: #090d16;
+      --card-bg: rgba(26, 34, 52, 0.85);
+      --card-border: rgba(255, 255, 255, 0.1);
+      --primary: #38bdf8;
+      --primary-hover: #0ea5e9;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --gold: #f59e0b;
+      --green: #10b981;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: calc(16px + env(safe-area-inset-top)) 16px calc(24px + env(safe-area-inset-bottom)) 16px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+    }
+
+    /* Header */
+    header {
+      text-align: center;
+      margin-bottom: 1.75rem;
+    }
+
+    .logo-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      background: rgba(56, 189, 248, 0.12);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      color: #38bdf8;
+      padding: 4px 12px;
+      border-radius: 20px;
+      font-size: 0.78rem;
+      font-weight: 700;
+      margin-bottom: 0.75rem;
+    }
+
+    header h1 {
+      font-size: 1.85rem;
+      font-weight: 800;
+      letter-spacing: -0.5px;
+      background: linear-gradient(135deg, #38bdf8, #818cf8, #c084fc);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 0.4rem;
+    }
+
+    header p {
+      color: var(--text-muted);
+      font-size: 0.92rem;
+      max-width: 480px;
+      margin: 0 auto;
+    }
+
+    /* Quick Launch Strip on Mobile */
+    .quick-strip {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 4px;
+      margin-bottom: 1.5rem;
+    }
+
+    .quick-strip::-webkit-scrollbar {
+      display: none;
+    }
+
+    .quick-pill {
+      background: rgba(30, 41, 59, 0.9);
+      border: 1px solid var(--card-border);
+      color: var(--text);
+      text-decoration: none;
+      padding: 9px 14px;
+      border-radius: 16px;
+      font-size: 0.82rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+
+    .quick-pill:active {
+      transform: scale(0.96);
+      background: var(--primary);
+      color: #000;
+    }
+
+    /* Section Title */
+    .section-title {
+      font-size: 1.15rem;
+      font-weight: 800;
+      margin-bottom: 0.85rem;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* App Cards Grid */
+    .app-grid {
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      margin-bottom: 2rem;
+    }
+
+    .app-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      position: relative;
+      box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+    }
+
+    .app-header {
+      display: flex;
+      align-items: flex-start;
+      gap: 12px;
+    }
+
+    .app-icon {
+      font-size: 2rem;
+      width: 50px;
+      height: 50px;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .app-meta {
+      flex: 1;
+    }
+
+    .app-title {
+      font-size: 1.12rem;
+      font-weight: 800;
+      margin-bottom: 2px;
+    }
+
+    .app-desc {
+      font-size: 0.82rem;
+      color: var(--text-muted);
+      line-height: 1.4;
+    }
+
+    .app-features {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    .feat-tag {
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: rgba(255, 255, 255, 0.06);
+      padding: 3px 8px;
+      border-radius: 8px;
+      color: #cbd5e1;
+    }
+
+    .btn-open {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      width: 100%;
+      padding: 13px;
+      border-radius: 14px;
+      font-size: 0.95rem;
+      font-weight: 800;
+      text-decoration: none;
+      transition: all 0.15s;
+    }
+
+    .btn-open:active {
+      transform: scale(0.98);
+    }
+
+    .btn-gold {
+      background: linear-gradient(135deg, #fbbf24, #f59e0b);
+      color: #1a0b02;
+      box-shadow: 0 4px 14px rgba(245, 158, 11, 0.35);
+    }
+
+    .btn-blue {
+      background: linear-gradient(135deg, #38bdf8, #0284c7);
+      color: #04101c;
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35);
+    }
+
+    .btn-green {
+      background: linear-gradient(135deg, #34d399, #059669);
+      color: #022c22;
+      box-shadow: 0 4px 14px rgba(16, 185, 129, 0.35);
+    }
+
+    /* Target Marker Card */
+    .marker-box {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 20px;
+      padding: 18px;
+      text-align: center;
+      margin-bottom: 2rem;
+    }
+
+    .marker-box h3 {
+      font-size: 1.05rem;
+      margin-bottom: 4px;
+      color: var(--primary);
+    }
+
+    .marker-box p {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+      margin-bottom: 14px;
+    }
+
+    .marker-box img {
+      max-width: 180px;
+      width: 100%;
+      border-radius: 12px;
+      border: 4px solid #fff;
+      display: block;
+      margin: 0 auto 12px auto;
+    }
+
+    .tip-box {
+      background: rgba(56, 189, 248, 0.08);
+      border: 1px solid rgba(56, 189, 248, 0.2);
+      border-radius: 12px;
+      padding: 10px 14px;
+      font-size: 0.78rem;
+      color: #7dd3fc;
+      text-align: left;
+    }
+
+    /* Footer */
+    footer {
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 12px 0;
+    }
+
+    @media (min-width: 600px) {
+      .app-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-badge">⚡ Local Server Active: Port 8085</div>
+      <h1>WebAR Studio Portal</h1>
+      <p>Clean, mobile-ready Augmented Reality experiences with instant 3D inspection and camera tracking.</p>
+    </header>
+
+    <!-- Quick Touch Navigation -->
+    <div class="quick-strip">
+      <a href="apps/menu/index.html" class="quick-pill">🍽️ AR Menu</a>
+      <a href="apps/furniture/index.html" class="quick-pill">🛋️ AR Furniture</a>
+      <a href="apps/importer/index.html" class="quick-pill">🔬 3D Model Lab</a>
+      <a href="aframe/examples/marker-camera.html" class="quick-pill">🅰️ A-Frame</a>
+    </div>
+
+    <!-- Main Apps -->
+    <div class="section-title">📱 Featured Applications</div>
+    <div class="app-grid">
+      <!-- App 1: Restaurant Menu -->
+      <div class="app-card">
+        <div class="app-header">
+          <div class="app-icon">🍽️</div>
+          <div class="app-meta">
+            <div class="app-title">AR Restaurant Menu</div>
+            <div class="app-desc">Interactive 3D dishes with calorie badges, ingredients, and table ordering.</div>
+          </div>
+        </div>
+        <div class="app-features">
+          <span class="feat-tag">🍔 5 3D Dishes</span>
+          <span class="feat-tag">🔥 Calorie Specs</span>
+          <span class="feat-tag">🛒 Table Cart</span>
+        </div>
+        <a href="apps/menu/index.html" class="btn-open btn-gold">
+          <span>Open AR Menu</span>
+          <span>&rarr;</span>
+        </a>
+      </div>
+
+      <!-- App 2: Furniture Studio -->
+      <div class="app-card">
+        <div class="app-header">
+          <div class="app-icon">🛋️</div>
+          <div class="app-meta">
+            <div class="app-title">AR Furniture Studio</div>
+            <div class="app-desc">True-to-scale designer furniture with real-time color swatches and 3D dimensions.</div>
+          </div>
+        </div>
+        <div class="app-features">
+          <span class="feat-tag">🪑 5 Models</span>
+          <span class="feat-tag">🎨 Color Swatches</span>
+          <span class="feat-tag">📏 3D Dimensions</span>
+        </div>
+        <a href="apps/furniture/index.html" class="btn-open btn-blue">
+          <span>Open Furniture Studio</span>
+          <span>&rarr;</span>
+        </a>
+      </div>
+
+      <!-- App 3: 3D Model Lab -->
+      <div class="app-card" style="grid-column: 1 / -1;">
+        <div class="app-header">
+          <div class="app-icon">🔬</div>
+          <div class="app-meta">
+            <div class="app-title">3D Model Lab & GLB Studio</div>
+            <div class="app-desc">Convert real photos into 3D! Tap to upload any <code>.glb</code> file, inspect polygons, and project it in AR.</div>
+          </div>
+        </div>
+        <div class="app-features">
+          <span class="feat-tag">📸 Photo $\to$ 3D Guide</span>
+          <span class="feat-tag">📥 GLB Uploader</span>
+          <span class="feat-tag">📊 Polygon Analytics</span>
+        </div>
+        <a href="apps/importer/index.html" class="btn-open btn-green">
+          <span>Open 3D Model Lab</span>
+          <span>&rarr;</span>
+        </a>
+      </div>
+    </div>
+
+    <!-- Target Marker -->
+    <div class="marker-box">
+      <h3>🎯 Target Hiro Marker</h3>
+      <p>Point your smartphone camera at this marker in AR Mode:</p>
+      <img src="data/images/HIRO.jpg" alt="Hiro Marker">
+      <div class="tip-box">
+        💡 <strong>Quick Mobile Tip:</strong> Open any app on your phone, click <strong>"📷 AR"</strong>, and point your camera at this screen or print the marker to see 3D models floating right in front of you!
+      </div>
+    </div>
+
+    <footer>
+      <p>AR.js Augmented Reality · Mobile Optimized · Powered by Three.js</p>
+    </footer>
+  </div>
+</body>
+</html>
