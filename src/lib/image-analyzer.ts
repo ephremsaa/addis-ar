@@ -43,10 +43,9 @@ export function analyzeVideoFrame(video: HTMLVideoElement): ImageQualityReport {
   let laplacianSum = 0;
   let laplacianCount = 0;
 
-  for (let y = 1; y < h - 1; y += 2) {
-    for (let x = 1; x < w - 1; x += 2) {
+  for (let y = 2; y < h - 2; y += 2) {
+    for (let x = 2; x < w - 2; x += 2) {
       const idx = y * w + x;
-      // 3x3 Laplacian kernel [0, 1, 0, 1, -4, 1, 0, 1, 0]
       const lap =
         gray[idx - w] +
         gray[idx + w] +
@@ -59,12 +58,12 @@ export function analyzeVideoFrame(video: HTMLVideoElement): ImageQualityReport {
   }
 
   const sharpness = laplacianCount > 0 ? (laplacianSum / laplacianCount) : 0;
-  const isTooDark = avgBrightness < 45;
-  const isSharp = sharpness > 8.0; // Sharp threshold
+  const isTooDark = avgBrightness < 25; // Gentle darkness threshold
+  const isSharp = sharpness >= 2.5; // Realistic threshold for mobile indoor lighting
 
   let message: string | undefined;
-  if (isTooDark) message = 'Too dark';
-  else if (!isSharp) message = 'Hold steady (blurry)';
+  if (isTooDark) message = 'Too dark · Turn on lights';
+  else if (!isSharp) message = 'Hold steady';
 
   return {
     isSharp,
@@ -98,7 +97,6 @@ export async function captureFrame(
   thumbCanvas.height = 100;
   const thumbCtx = thumbCanvas.getContext('2d');
   if (thumbCtx) {
-    // Center crop to square
     const minDim = Math.min(canvas.width, canvas.height);
     const sx = (canvas.width - minDim) / 2;
     const sy = (canvas.height - minDim) / 2;
@@ -116,4 +114,3 @@ export async function captureFrame(
 
   return { blob, dataUrl, thumbnailUrl };
 }
-

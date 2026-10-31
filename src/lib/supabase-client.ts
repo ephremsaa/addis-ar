@@ -51,3 +51,4 @@ export async function uploadGlbToSupabase(
     return { success: false, error: msg };
   }
 }
+

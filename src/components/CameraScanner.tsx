@@ -1,6 +1,5 @@
 import React, { useRef, useState, useEffect, useCallback } from 'react';
 import {
-  X,
   SwitchCamera,
   Zap,
   ZapOff,
@@ -9,8 +8,12 @@ import {
   Sparkles,
   Camera,
   CheckCircle2,
-  AlertTriangle,
   RotateCcw,
+  ChevronLeft,
+  ChevronRight,
+  Layers,
+  ArrowUp,
+  ArrowDown,
 } from 'lucide-react';
 import { AngleCoverageRing } from './AngleCoverageRing';
 import {
@@ -19,6 +22,7 @@ import {
   getCoverageStats,
   getMissingAnglesGuidance,
   TOTAL_SECTORS,
+  determineHeightLevel,
 } from '../lib/sectors';
 import { sensorTracker, type OrientationState } from '../lib/sensor-tracker';
 import { analyzeVideoFrame, captureFrame, type ImageQualityReport } from '../lib/image-analyzer';
@@ -28,6 +32,31 @@ interface CameraScannerProps {
   onFinishScan: (photos: CapturedPhoto[]) => void;
   onOpenSettings: () => void;
   settings: ScannerSettings;
+}
+
+// Crisp shutter click sound using Web Audio API
+function playShutterSound() {
+  try {
+    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    if (!AudioContextClass) return;
+    const ctx = new AudioContextClass();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+
+    osc.type = 'triangle';
+    osc.frequency.setValueAtTime(800, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(180, ctx.currentTime + 0.08);
+
+    gain.gain.setValueAtTime(0.35, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.08);
+
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.08);
+  } catch {
+    // Audio context may be restricted before first gesture
+  }
 }
 
 export const CameraScanner: React.FC<CameraScannerProps> = ({
@@ -43,13 +72,14 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [sectors, setSectors] = useState<AngleSector[]>(createInitialSectors);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
 
-  // Sensor state
+  // Sensor state (Gyro + Optical)
   const [orientation, setOrientation] = useState<OrientationState>({
     azimuth: 0,
     elevation: 30,
     roll: 0,
     isCalibrated: false,
     angularVelocity: 0,
+    trackingSource: 'sensors',
   });
 
   // Camera settings
@@ -65,7 +95,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     isTooDark: false,
     brightness: 120,
   });
-  const [liveTip, setLiveTip] = useState<string>('Tap capture to start 360° scan');
+  const [liveTip, setLiveTip] = useState<string>('Point at product & tap capture');
   const [lastCaptureFlash, setLastCaptureFlash] = useState(false);
 
   // Progress stats
@@ -131,7 +161,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // 4. Start Sensor Tracking
+  // 4. Start Sensor & Optical Tracking
   useEffect(() => {
     const unsub = sensorTracker.subscribe((state) => {
       setOrientation(state);
@@ -145,23 +175,27 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     };
   }, []);
 
-  // 5. Real-Time Image Quality & Guidance Analysis Loop
+  // 5. Frame Analysis & Optical Tracking Loop
   useEffect(() => {
     let animId: number;
 
     const loop = () => {
       if (videoRef.current && videoRef.current.readyState >= 2) {
+        // Run optical displacement tracker
+        sensorTracker.processVideoFrame(videoRef.current);
+
+        // Quality check
         const report = analyzeVideoFrame(videoRef.current);
         setQualityReport(report);
 
-        // Compute live guidance
+        // Compute live tips
         if (isScanning) {
-          if (orientation.angularVelocity > 45) {
+          if (orientation.angularVelocity > 50) {
             setLiveTip('⚠️ Move slower');
           } else if (report.isTooDark) {
-            setLiveTip('💡 Scene too dark — turn on lights');
+            setLiveTip('💡 Scene too dark · Add light');
           } else if (!report.isSharp) {
-            setLiveTip('✋ Hold steady (blurry)');
+            setLiveTip('✋ Hold steady to scan');
           } else {
             const guidance = getMissingAnglesGuidance(sectors, orientation.azimuth, orientation.elevation);
             setLiveTip(guidance);
@@ -175,13 +209,15 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     return () => cancelAnimationFrame(animId);
   }, [isScanning, orientation, sectors]);
 
-  // 6. Capture Angle Frame (Manual or Auto)
-  const captureCurrentAngle = useCallback(async () => {
+  // 6. Primary Angle Photo Capture
+  const captureCurrentAngle = useCallback(async (manualStep = false) => {
     if (!videoRef.current || videoRef.current.readyState < 2) return;
 
-    // Find the current sector
-    const currentSector = findSectorForAngle(sectors, orientation.azimuth, orientation.elevation);
-    if (!currentSector) return;
+    // Find current or nearest uncovered sector
+    let currentSector = findSectorForAngle(sectors, orientation.azimuth, orientation.elevation);
+    if (!currentSector) {
+      currentSector = sectors.find((s) => !s.isCovered) || sectors[0];
+    }
 
     try {
       const { blob, dataUrl, thumbnailUrl } = await captureFrame(videoRef.current);
@@ -206,75 +242,87 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
       setPhotos((prev) => [...prev, newPhoto]);
 
-      // Haptic feedback
+      // Play audio shutter click
+      playShutterSound();
+
+      // Haptic vibration feedback
       if (settings.hapticFeedback && typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([35]);
+        navigator.vibrate([40]);
       }
 
-      // Visual flash pulse
+      // Visual camera shutter flash
       setLastCaptureFlash(true);
-      setTimeout(() => setLastCaptureFlash(false), 180);
+      setTimeout(() => setLastCaptureFlash(false), 160);
+
+      // If manual capture, optionally advance to the next angle
+      if (manualStep) {
+        sensorTracker.stepAngle(30);
+      }
     } catch (err) {
       console.error('Frame capture failed:', err);
     }
   }, [orientation, qualityReport, sectors, settings.hapticFeedback]);
 
-  // 7. Intelligent Auto-Capture Engine
+  // 7. Auto-Capture Interval when Hovering over Uncovered Angle
   useEffect(() => {
     if (!isScanning || !settings.autoCapture) return;
 
-    // Check if moving too fast
-    if (orientation.angularVelocity > 40) return;
+    if (orientation.angularVelocity > 45 || !qualityReport.isSharp || qualityReport.isTooDark) return;
 
-    // Check if sharp and well-lit
-    if (!qualityReport.isSharp || qualityReport.isTooDark) return;
-
-    // Check if current sector is uncovered
     const targetSector = findSectorForAngle(sectors, orientation.azimuth, orientation.elevation);
     if (!targetSector || targetSector.isCovered) return;
 
-    // Debounce capture
     const timer = setTimeout(() => {
-      captureCurrentAngle();
-    }, 280);
+      captureCurrentAngle(false);
+    }, 400);
 
     return () => clearTimeout(timer);
   }, [isScanning, orientation, qualityReport, sectors, settings.autoCapture, captureCurrentAngle]);
 
-  // 8. Start / Stop Scanning Handler
-  const handleToggleScan = async () => {
+  // 8. Capture Button Tap Handler
+  const handleCaptureButtonClick = async () => {
     if (!isScanning) {
-      // Request device orientation permissions on iOS
       await sensorTracker.requestPermission();
       sensorTracker.resetCalibration();
       setIsScanning(true);
-      setLiveTip('Walk slowly 360° around the product');
-    } else {
-      // Stop or Finish
-      if (stats.covered >= 3) {
-        onFinishScan(photos);
-      } else {
-        setIsScanning(false);
-        setLiveTip('Tap capture to start 360° scan');
-      }
+      setLiveTip('Walk 360° around the product');
     }
+    // Immediately capture current angle on every tap!
+    await captureCurrentAngle(true);
   };
 
-  // Reset scan
+  // 9. Manual Angle Stepping
+  const handleStepPrev = () => sensorTracker.stepAngle(-30);
+  const handleStepNext = () => sensorTracker.stepAngle(30);
+  const handleSetHeight = (elev: number) => sensorTracker.setElevation(elev);
+
+  // 10. Finish Scan Handler
+  const handleFinishScan = () => {
+    if (photos.length < 3) {
+      setLiveTip('Capture at least 3 photos to build 3D model');
+      return;
+    }
+    onFinishScan(photos);
+  };
+
+  // 11. Reset Scan
   const handleResetScan = () => {
     setSectors(createInitialSectors());
     setPhotos([]);
     setIsScanning(false);
-    setLiveTip('Scan reset. Tap capture to start again.');
+    sensorTracker.resetCalibration();
+    setLiveTip('Scan reset. Point at product & tap capture.');
   };
 
-  // SVG Progress Ring circumference
+  // Progress ring
   const btnRadius = 38;
   const btnCircumference = 2 * Math.PI * btnRadius;
   const strokeDashoffset = btnCircumference - (stats.percent / 100) * btnCircumference;
 
+  const currentLevel = determineHeightLevel(orientation.elevation);
+
   return (
-    <div className="relative w-full h-full overflow-hidden bg-black flex flex-col justify-between">
+    <div className="relative w-full h-full overflow-hidden bg-black flex flex-col justify-between select-none">
       {/* 1. Full-Screen Camera Video Feed */}
       <video
         ref={videoRef}
@@ -284,16 +332,16 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         className="absolute inset-0 w-full h-full object-cover z-0"
       />
 
-      {/* Screen flash on frame capture */}
+      {/* Camera shutter flash effect on capture */}
       <div
-        className={`absolute inset-0 bg-white pointer-events-none z-10 transition-opacity duration-150 ${
-          lastCaptureFlash ? 'opacity-35' : 'opacity-0'
+        className={`absolute inset-0 bg-white pointer-events-none z-30 transition-opacity duration-150 ${
+          lastCaptureFlash ? 'opacity-40' : 'opacity-0'
         }`}
       />
 
       {/* 2. Top Bar (Snapchat Style) */}
       <header className="relative z-20 flex items-center justify-between px-4 pt-3 pb-2 mt-safe">
-        {/* Reset / Clear Scan button */}
+        {/* Reset Scan button */}
         <button
           onClick={handleResetScan}
           className="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white/90"
@@ -303,9 +351,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         </button>
 
         {/* Live Status Guidance Pill */}
-        <div className="glass-pill px-4 py-1.5 rounded-full flex items-center gap-2 max-w-[65vw]">
+        <div className="glass-pill px-4 py-1.5 rounded-full flex items-center gap-2 max-w-[62vw]">
           <span
-            className={`w-2.5 h-2.5 rounded-full ${
+            className={`w-2.5 h-2.5 rounded-full shrink-0 ${
               isScanning ? 'bg-emerald-400 shadow-[0_0_8px_#34d399] animate-pulse' : 'bg-sky-400'
             }`}
           />
@@ -315,7 +363,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         </div>
 
         {/* Coverage Progress Badge */}
-        <div className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5">
+        <div className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0">
           <span className="text-xs font-bold text-emerald-400">{stats.percent}%</span>
           <span className="text-[10px] text-slate-400 font-medium">
             {stats.covered}/{TOTAL_SECTORS}
@@ -323,8 +371,19 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         </div>
       </header>
 
-      {/* 3. Center Angle Coverage Dome / Reticle HUD */}
-      <main className="relative z-10 flex-1 flex items-center justify-center pointer-events-none">
+      {/* 3. Center 3D Scanning HUD & Angle Coverage Dome */}
+      <main className="relative z-10 flex-1 flex flex-col items-center justify-center pointer-events-none">
+        {/* Animated Laser Scanning Line */}
+        {isScanning && (
+          <div className="absolute w-[76vw] max-w-[320px] h-[76vw] max-h-[320px] border border-sky-400/30 rounded-3xl overflow-hidden pointer-events-none">
+            <div className="w-full h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent shadow-[0_0_12px_#34d399] animate-laser" />
+            <div className="absolute top-2 left-2 text-[10px] font-mono text-emerald-400/80 uppercase">
+              3D Laser Active · 360° Mesh
+            </div>
+          </div>
+        )}
+
+        {/* 36-Segment Angle Coverage Dome */}
         {showDome && (
           <div className="transition-all duration-300">
             <AngleCoverageRing
@@ -332,8 +391,46 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
               currentAzimuth={orientation.azimuth}
               currentElevation={orientation.elevation}
               isScanning={isScanning}
-              size={Math.min(window.innerWidth * 0.76, 290)}
+              size={Math.min(window.innerWidth * 0.74, 280)}
             />
+          </div>
+        )}
+
+        {/* Height Level Switchers (Low / Eye / Top) */}
+        {isScanning && (
+          <div className="mt-2 pointer-events-auto flex gap-1.5 glass-panel p-1 rounded-full text-[11px] font-semibold">
+            <button
+              onClick={() => handleSetHeight(15)}
+              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
+                currentLevel === 'low'
+                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <ArrowDown className="w-3 h-3" />
+              <span>Low (Base)</span>
+            </button>
+            <button
+              onClick={() => handleSetHeight(35)}
+              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
+                currentLevel === 'mid'
+                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <span>Eye (Sides)</span>
+            </button>
+            <button
+              onClick={() => handleSetHeight(70)}
+              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
+                currentLevel === 'top'
+                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
+                  : 'text-slate-300 hover:text-white'
+              }`}
+            >
+              <ArrowUp className="w-3 h-3" />
+              <span>Top</span>
+            </button>
           </div>
         )}
       </main>
@@ -383,8 +480,19 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         </button>
       </aside>
 
-      {/* 5. Bottom Section: Photo Thumbnail Strip & Snapchat Capture Button */}
+      {/* 5. Bottom Section: Photo Thumbnail Strip, Finish Button & Snapchat Capture Button */}
       <footer className="relative z-20 flex flex-col items-center gap-3 pb-5 mb-safe w-full">
+        {/* FINISH SCAN BUTTON: Appears as soon as at least 3 photos are taken */}
+        {photos.length >= 3 && (
+          <button
+            onClick={handleFinishScan}
+            className="glass-panel px-6 py-2.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2 shadow-[0_0_20px_rgba(16,185,129,0.5)] animate-pulse active:scale-95 transition-all"
+          >
+            <Sparkles className="w-4 h-4 fill-slate-950" />
+            <span>Build 3D Model & Download .GLB ({photos.length} Photos)</span>
+          </button>
+        )}
+
         {/* Thumbnail Strip of Captured Angle Photos */}
         {photos.length > 0 && (
           <div className="w-full px-4 flex items-center gap-2 overflow-x-auto scrollbar-none py-1">
@@ -402,69 +510,77 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           </div>
         )}
 
-        {/* Big Center Capture Button (Snapchat Style) */}
-        <div className="relative flex items-center justify-center">
-          {/* Circular SVG Progress Ring */}
-          <svg className="w-24 h-24 -rotate-90 pointer-events-none">
-            <circle
-              cx="48"
-              cy="48"
-              r={btnRadius}
-              className="text-white/20 stroke-current"
-              strokeWidth="4"
-              fill="transparent"
-            />
-            <circle
-              cx="48"
-              cy="48"
-              r={btnRadius}
-              className="text-emerald-400 stroke-current transition-all duration-300"
-              strokeWidth="4.5"
-              strokeDasharray={btnCircumference}
-              strokeDashoffset={strokeDashoffset}
-              strokeLinecap="round"
-              fill="transparent"
-            />
-          </svg>
+        {/* Bottom Stepper & Big Capture Button */}
+        <div className="flex items-center gap-6">
+          {/* Step Angle Left */}
+          {isScanning && (
+            <button
+              onClick={handleStepPrev}
+              className="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-90"
+              title="Step Angle Counterclockwise"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
+          )}
 
-          {/* Primary Trigger Button */}
-          <button
-            onClick={handleToggleScan}
-            className={`absolute w-18 h-18 rounded-full flex items-center justify-center transition-all duration-300 shadow-xl ${
-              stats.percent >= 100
-                ? 'bg-gradient-to-tr from-emerald-500 to-teal-300 text-slate-950 scale-105 shadow-emerald-500/50 animate-bounce'
-                : isScanning
-                ? 'bg-rose-500 text-white scale-95 shadow-rose-500/50'
-                : 'bg-white text-slate-900 active:scale-95'
-            }`}
-            title={
-              stats.percent >= 100
-                ? 'Complete! Build 3D Model'
-                : isScanning
-                ? 'Stop / Finish Scanning'
-                : 'Start 360° Scan'
-            }
-          >
-            {stats.percent >= 100 ? (
-              <Sparkles className="w-8 h-8 fill-slate-950" />
-            ) : isScanning ? (
-              <div className="w-6 h-6 rounded-sm bg-white" />
-            ) : (
+          {/* Big Center Capture Button */}
+          <div className="relative flex items-center justify-center">
+            {/* Circular Progress Ring */}
+            <svg className="w-24 h-24 -rotate-90 pointer-events-none">
+              <circle
+                cx="48"
+                cy="48"
+                r={btnRadius}
+                className="text-white/20 stroke-current"
+                strokeWidth="4"
+                fill="transparent"
+              />
+              <circle
+                cx="48"
+                cy="48"
+                r={btnRadius}
+                className="text-emerald-400 stroke-current transition-all duration-300"
+                strokeWidth="4.5"
+                strokeDasharray={btnCircumference}
+                strokeDashoffset={strokeDashoffset}
+                strokeLinecap="round"
+                fill="transparent"
+              />
+            </svg>
+
+            {/* Tap to Capture Shutter Button */}
+            <button
+              onClick={handleCaptureButtonClick}
+              className={`absolute w-18 h-18 rounded-full flex items-center justify-center transition-all duration-200 shadow-xl active:scale-90 ${
+                isScanning
+                  ? 'bg-white text-slate-950 border-4 border-emerald-400 shadow-emerald-500/40'
+                  : 'bg-white text-slate-900'
+              }`}
+              title="Tap to capture angle photo"
+            >
               <Camera className="w-8 h-8 text-slate-900" />
-            )}
-          </button>
+            </button>
+          </div>
+
+          {/* Step Angle Right */}
+          {isScanning && (
+            <button
+              onClick={handleStepNext}
+              className="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-white active:scale-90"
+              title="Step Angle Clockwise"
+            >
+              <ChevronRight className="w-6 h-6" />
+            </button>
+          )}
         </div>
 
-        {/* Small Action Label */}
+        {/* Bottom Instruction */}
         <p className="text-[11px] font-semibold tracking-wider text-slate-300 uppercase">
-          {stats.percent >= 100
-            ? '✨ Tap to Build 3D Model'
-            : isScanning
-            ? 'Scanning · Tap to Finish'
-            : 'Tap button to scan product'}
+          {isScanning
+            ? '📸 Tap circle to capture angle · Orbit slowly'
+            : 'Tap circle to start 3D scan'}
         </p>
       </footer>
     </div>
   );
 };
-
