@@ -116,3 +116,4 @@ export async function captureFrame(
 
   return { blob, dataUrl, thumbnailUrl };
 }
+

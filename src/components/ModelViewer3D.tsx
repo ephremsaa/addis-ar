@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
-import { Download, Eye, RotateCcw, Share2, Sparkles, Box, CheckCircle2 } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Download, Eye, RotateCcw, Cloud, Check, Loader2, Sparkles, CheckCircle2 } from 'lucide-react';
 import confetti from 'canvas-confetti';
+import { uploadGlbToSupabase } from '../lib/supabase-client';
 
 interface ModelViewer3DProps {
   glbUrl: string;
@@ -16,6 +17,9 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
   onRescan,
 }) => {
   const modelViewerRef = useRef<HTMLElement | null>(null);
+  const [isUploading, setIsUploading] = useState(false);
+  const [cloudUrl, setCloudUrl] = useState<string | null>(null);
+  const [copySuccess, setCopySuccess] = useState(false);
 
   // Trigger celebration confetti on mount
   useEffect(() => {
@@ -41,10 +45,24 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
   // Trigger Native Phone AR
   const handleLaunchAR = () => {
     if (modelViewerRef.current) {
-      // model-viewer exposes an activateAR method
       const mv = modelViewerRef.current as unknown as { activateAR?: () => void };
       if (typeof mv.activateAR === 'function') {
         mv.activateAR();
+      }
+    }
+  };
+
+  // Upload to Supabase Cloud Storage
+  const handleSaveToCloud = async () => {
+    setIsUploading(true);
+    const res = await uploadGlbToSupabase(glbBlob, 'product_scan');
+    setIsUploading(false);
+    if (res.success && res.publicUrl) {
+      setCloudUrl(res.publicUrl);
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(res.publicUrl);
+        setCopySuccess(true);
+        setTimeout(() => setCopySuccess(false), 3000);
       }
     }
   };
@@ -68,11 +86,33 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
           <span>3D Model Ready</span>
         </div>
 
-        {/* File size badge */}
-        <div className="glass-pill px-2.5 py-1.5 rounded-full text-[11px] font-bold text-slate-300">
-          {stats?.fileSizeMb || 1.8} MB
-        </div>
+        {/* Cloud Upload Button */}
+        <button
+          onClick={handleSaveToCloud}
+          disabled={isUploading}
+          className={`glass-btn px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold ${
+            cloudUrl ? 'text-emerald-400 border-emerald-400/40' : 'text-sky-300'
+          }`}
+          title="Save to Supabase Cloud"
+        >
+          {isUploading ? (
+            <Loader2 className="w-4 h-4 animate-spin text-sky-400" />
+          ) : cloudUrl ? (
+            <Check className="w-4 h-4 text-emerald-400" />
+          ) : (
+            <Cloud className="w-4 h-4 text-sky-400" />
+          )}
+          <span>{cloudUrl ? 'Link Copied!' : 'Save Cloud'}</span>
+        </button>
       </header>
+
+      {/* Cloud URL notification banner if uploaded */}
+      {cloudUrl && (
+        <div className="relative z-20 mx-4 px-3 py-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 flex items-center justify-between text-[11px] text-emerald-300">
+          <span className="truncate mr-2">Cloud URL: {cloudUrl}</span>
+          <span className="font-bold text-emerald-400 shrink-0">Copied!</span>
+        </div>
+      )}
 
       {/* 2. Interactive Google <model-viewer> Container */}
       <main className="relative z-10 flex-1 w-full h-full flex items-center justify-center p-2">

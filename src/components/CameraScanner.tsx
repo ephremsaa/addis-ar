@@ -467,3 +467,4 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     </div>
   );
 };
+
