@@ -1,47 +1,33 @@
 {
-  "name": "ar.js",
-  "version": "2.2.2",
-  "description": "Efficient Augmented Reality for the Web",
-  "main": "./aframe/build/aframe-ar.min.js",
-  "bin": {
-    "vite": "./build.js"
-  },
+  "name": "addis-ar",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
   "scripts": {
-    "start": "http-server -p 8085 -c-1",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "build": "node build.js",
-    "vite": "node build.js",
-    "minify": "make minify"
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
   },
-  "files": [
-    "three.js/build",
-    "aframe/build",
-    "data",
-    "three.js/examples/basic.html",
-    "three.js/examples/vendor/three.js/build/three.min.js",
-    "aframe/examples/basic.html",
-    "aframe/examples/vendor/aframe/build/aframe.min.js"
-  ],
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/jeromeetienne/AR.js.git"
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.1",
+    "canvas-confetti": "^1.9.4",
+    "clsx": "^2.1.1",
+    "lucide-react": "^0.475.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "tailwind-merge": "^3.0.1",
+    "three": "^0.174.0"
   },
-  "keywords": [
-    "AR",
-    "VR",
-    "three.js",
-    "aframe",
-    "augmented reality",
-    "location based"
-  ],
-  "author": "jerome.etienne@gmail.com",
-  "license": "MIT",
-  "bugs": {
-    "url": "https://github.com/jeromeetienne/AR.js/issues"
-  },
-  "homepage": "https://github.com/jeromeetienne/AR.js#readme",
   "devDependencies": {
-    "http-server": "^14.1.1",
-    "uglify-js": "^3.7.5"
+    "@tailwindcss/vite": "^4.0.8",
+    "@types/canvas-confetti": "^1.9.0",
+    "@types/node": "^22.13.4",
+    "@types/react": "^18.3.18",
+    "@types/react-dom": "^18.3.5",
+    "@types/three": "^0.174.0",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.8",
+    "typescript": "^5.7.3",
+    "vite": "^6.1.1"
   }
 }
