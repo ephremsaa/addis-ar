@@ -2,11 +2,12 @@ import React, { useEffect, useState } from 'react';
 import { Loader2, AlertCircle, RefreshCw, Layers, CheckCircle2, Cpu, Sparkles, Box } from 'lucide-react';
 import { runColmapPipeline } from '../lib/colmap-client';
 import { runClientReconstruction } from '../lib/client-reconstructor';
-import type { CapturedPhoto, ScannerSettings } from '../types/scanner';
+import type { CapturedPhoto, ScannerSettings, ProductShape } from '../types/scanner';
 
 interface ProcessingScreenProps {
   photos: CapturedPhoto[];
   settings: ScannerSettings;
+  shape?: ProductShape;
   onSuccess: (glbUrl: string, glbBlob: Blob, stats: { vertices: number; triangles: number; fileSizeMb: number }) => void;
   onRetry: () => void;
 }
@@ -24,6 +25,7 @@ const STAGES = [
 export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
   photos,
   settings,
+  shape = 'auto',
   onSuccess,
   onRetry,
 }) => {
@@ -65,13 +67,17 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
         }
 
         // Client-side photogrammetry engine
-        const result = await runClientReconstruction(photos, (prog, stage, msg) => {
-          if (!isCancelled) {
-            setProgress(prog);
-            setCurrentStage(stage);
-            setMessage(msg);
-          }
-        });
+        const result = await runClientReconstruction(
+          photos,
+          (prog, stage, msg) => {
+            if (!isCancelled) {
+              setProgress(prog);
+              setCurrentStage(stage);
+              setMessage(msg);
+            }
+          },
+          { shape }
+        );
 
         if (!isCancelled) {
           onSuccess(result.glbUrl, result.glbBlob, result.stats);

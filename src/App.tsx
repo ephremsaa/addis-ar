@@ -3,7 +3,7 @@ import { CameraScanner } from './components/CameraScanner';
 import { ProcessingScreen } from './components/ProcessingScreen';
 import { ModelViewer3D } from './components/ModelViewer3D';
 import { SettingsModal } from './components/SettingsModal';
-import type { CapturedPhoto, ScannerSettings } from './types/scanner';
+import type { CapturedPhoto, ScannerSettings, ProductShape } from './types/scanner';
 
 const DEFAULT_SETTINGS: ScannerSettings = {
   colmapServerUrl: 'http://localhost:8000',
@@ -19,6 +19,7 @@ const DEFAULT_SETTINGS: ScannerSettings = {
 export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<'camera' | 'processing' | 'viewer'>('camera');
   const [capturedPhotos, setCapturedPhotos] = useState<CapturedPhoto[]>([]);
+  const [selectedShape, setSelectedShape] = useState<ProductShape>('auto');
   const [glbResult, setGlbResult] = useState<{
     url: string;
     blob: Blob;
@@ -44,9 +45,10 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleFinishScan = (photos: CapturedPhoto[]) => {
+  const handleFinishScan = (photos: CapturedPhoto[], shape: ProductShape = 'auto') => {
     if (photos.length < 3) return;
     setCapturedPhotos(photos);
+    setSelectedShape(shape);
     setCurrentScreen('processing');
   };
 
@@ -82,6 +84,7 @@ export const App: React.FC = () => {
         <ProcessingScreen
           photos={capturedPhotos}
           settings={settings}
+          shape={selectedShape}
           onSuccess={handleProcessingSuccess}
           onRetry={handleRescan}
         />

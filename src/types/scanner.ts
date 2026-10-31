@@ -1,5 +1,7 @@
 export type HeightLevel = 'low' | 'mid' | 'top';
 
+export type ProductShape = 'box' | 'cylinder' | 'auto';
+
 export interface AngleSector {
   id: string; // e.g. "mid-0", "top-30", "low-60"
   azimuthIndex: number; // 0..11 (each 30 degrees)
@@ -39,6 +41,7 @@ export interface ScannerSettings {
   useColmapBackend: boolean;
   supabaseUrl: string;
   supabaseAnonKey: string;
+  productShape?: ProductShape;
 }
 
 export interface ReconstructionJob {
@@ -54,4 +57,3 @@ export interface ReconstructionJob {
   fileSizeMb?: number;
   error?: string;
 }
-

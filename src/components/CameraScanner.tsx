@@ -16,6 +16,9 @@ import {
   ArrowDown,
   Activity,
   Scan,
+  Box,
+  Target,
+  Maximize2,
 } from 'lucide-react';
 import { AngleCoverageRing } from './AngleCoverageRing';
 import {
@@ -28,11 +31,12 @@ import {
   determineHeightLevel,
 } from '../lib/sectors';
 import { sensorTracker, type OrientationState } from '../lib/sensor-tracker';
+import { productTracker, type ProductTrackingResult } from '../lib/product-tracker';
 import { analyzeVideoFrame, captureFrame, type ImageQualityReport } from '../lib/image-analyzer';
-import type { CapturedPhoto, ScannerSettings } from '../types/scanner';
+import type { CapturedPhoto, ScannerSettings, ProductShape } from '../types/scanner';
 
 interface CameraScannerProps {
-  onFinishScan: (photos: CapturedPhoto[]) => void;
+  onFinishScan: (photos: CapturedPhoto[], shape: ProductShape) => void;
   onOpenSettings: () => void;
   settings: ScannerSettings;
 }
@@ -74,6 +78,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [isScanning, setIsScanning] = useState(false);
   const [sectors, setSectors] = useState<AngleSector[]>(createInitialSectors);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [productShape, setProductShape] = useState<ProductShape>('box');
 
   // Sensor state (Gyro + Optical flow)
   const [orientation, setOrientation] = useState<OrientationState>({
@@ -83,6 +88,18 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     isCalibrated: false,
     angularVelocity: 0,
     trackingSource: 'sensors',
+  });
+
+  // Real-time Product Tracking Result
+  const [tracking, setTracking] = useState<ProductTrackingResult>({
+    isLocked: false,
+    confidence: 0,
+    bounds: { x: 0.5, y: 0.5, width: 0.5, height: 0.5 },
+    pixelBounds: { minX: 20, minY: 20, maxX: 100, maxY: 70 },
+    featurePoints: [],
+    distanceFeedback: 'optimal',
+    guidance: 'Center product in frame',
+    aspectRatio: 0.85,
   });
 
   // Camera settings
@@ -186,27 +203,35 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     };
   }, []);
 
-  // 5. Frame Analysis & Optical Tracking Loop
+  // 5. Product Tracking & Frame Analysis Loop
   useEffect(() => {
     let animId: number;
 
     const loop = () => {
       if (videoRef.current && videoRef.current.readyState >= 2) {
-        // Run optical motion displacement tracking
+        // Run Optical flow displacement tracking
         sensorTracker.processVideoFrame(videoRef.current);
 
-        // Quality analysis
+        // Run Product Visual Tracker
+        const trackRes = productTracker.trackFrame(videoRef.current);
+        setTracking(trackRes);
+
+        // Quality check
         const report = analyzeVideoFrame(videoRef.current);
         setQualityReport(report);
 
-        // Compute live tips
+        // Live Contextual Guidance Tips
         if (isScanning) {
           if (orientation.angularVelocity > 50) {
             setLiveTip('Move slower');
           } else if (report.isTooDark) {
-            setLiveTip('Scene too dark · Turn on lights');
+            setLiveTip('Scene too dark · Add lighting');
           } else if (!report.isSharp) {
             setLiveTip('Hold steady to focus');
+          } else if (trackRes.distanceFeedback === 'too_far') {
+            setLiveTip('Move closer to product');
+          } else if (trackRes.distanceFeedback === 'too_close') {
+            setLiveTip('Step back slightly');
           } else {
             const guidance = getMissingAnglesGuidance(sectors, orientation.azimuth, orientation.elevation);
             setLiveTip(guidance);
@@ -294,17 +319,21 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const handleCaptureButtonClick = async () => {
     if (!isScanning) {
       await sensorTracker.requestPermission();
-      sensorTracker.resetCalibration();
+      sensorTracker.calibrateFront();
       setIsScanning(true);
       setLiveTip('Walk 360° around product');
     }
     await captureCurrentAngle(true);
   };
 
-  // 9. Steppers & Elevation Handlers
+  // 9. Steppers, Calibration & Elevation Handlers
   const handleStepPrev = () => sensorTracker.stepAngle(-30);
   const handleStepNext = () => sensorTracker.stepAngle(30);
   const handleSetHeight = (elev: number) => sensorTracker.setElevation(elev);
+  const handleCalibrateFront = () => {
+    sensorTracker.calibrateFront();
+    setLiveTip('Front set to 0°');
+  };
 
   // 10. Finish Scan Handler
   const handleFinishScan = () => {
@@ -312,7 +341,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       setLiveTip('Capture at least 3 photos to build 3D model');
       return;
     }
-    onFinishScan(photos);
+    onFinishScan(photos, productShape);
   };
 
   // 11. Reset Scan
@@ -329,6 +358,12 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const btnCircumference = 2 * Math.PI * btnRadius;
   const strokeDashoffset = btnCircumference - (stats.percent / 100) * btnCircumference;
   const currentLevel = determineHeightLevel(orientation.elevation);
+
+  // Tracked bounds style in viewport percentages
+  const boxLeft = `${Math.max(10, Math.min(80, (tracking.bounds.x - tracking.bounds.width / 2) * 100))}%`;
+  const boxTop = `${Math.max(15, Math.min(75, (tracking.bounds.y - tracking.bounds.height / 2) * 100))}%`;
+  const boxWidth = `${Math.max(25, Math.min(80, tracking.bounds.width * 100))}%`;
+  const boxHeight = `${Math.max(25, Math.min(75, tracking.bounds.height * 100))}%`;
 
   return (
     <div className="relative w-full h-full overflow-hidden bg-[#07090e] flex flex-col justify-between select-none font-sans">
@@ -367,7 +402,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         </button>
 
         {/* Live Contextual Status Pill */}
-        <div className="glass-pill px-3.5 py-1.5 rounded-full flex items-center gap-2 max-w-[60vw]">
+        <div className="glass-pill px-3.5 py-1.5 rounded-full flex items-center gap-2 max-w-[58vw]">
           <span
             className={`w-2 h-2 rounded-full shrink-0 ${
               isScanning
@@ -380,58 +415,129 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           </span>
         </div>
 
-        {/* Progress Counter Pill */}
-        <div className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 font-mono">
-          <span className="text-xs font-bold text-emerald-400">{stats.percent}%</span>
-          <span className="text-[10px] text-slate-400 font-medium">
-            {stats.covered}/{TOTAL_SECTORS}
-          </span>
+        {/* Calibrate 0° Front & Progress Pill */}
+        <div className="flex items-center gap-1.5">
+          <button
+            onClick={handleCalibrateFront}
+            className="glass-btn px-2.5 py-1.5 rounded-full flex items-center gap-1 text-[11px] font-mono text-cyan-300 font-bold"
+            title="Set Current Heading as Front (0°)"
+          >
+            <Target className="w-3.5 h-3.5 text-cyan-400" />
+            <span>0°</span>
+          </button>
+
+          <div className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 font-mono">
+            <span className="text-xs font-bold text-emerald-400">{stats.percent}%</span>
+            <span className="text-[10px] text-slate-400 font-medium">
+              {stats.covered}/{TOTAL_SECTORS}
+            </span>
+          </div>
         </div>
       </header>
 
-      {/* 3. Center AR HUD & 3D Volume Reticle */}
+      {/* 3. Center AR HUD & Real-Time Product Tracker Reticle */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center pointer-events-none">
-        {/* 3D Scanning Volume Corner Reticles */}
-        <div className="relative w-[72vw] max-w-[310px] h-[72vw] max-h-[310px] flex items-center justify-center pointer-events-none">
-          {/* Top-Left Corner */}
-          <div className="absolute top-0 left-0 w-6 h-6 border-t-2 border-l-2 border-cyan-400/80 rounded-tl-lg shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
-          {/* Top-Right Corner */}
-          <div className="absolute top-0 right-0 w-6 h-6 border-t-2 border-r-2 border-cyan-400/80 rounded-tr-lg shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
-          {/* Bottom-Left Corner */}
-          <div className="absolute bottom-0 left-0 w-6 h-6 border-b-2 border-l-2 border-cyan-400/80 rounded-bl-lg shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
-          {/* Bottom-Right Corner */}
-          <div className="absolute bottom-0 right-0 w-6 h-6 border-b-2 border-r-2 border-cyan-400/80 rounded-br-lg shadow-[0_0_8px_rgba(34,211,238,0.4)]" />
+        {/* Dynamic Product Tracking Bounding Box */}
+        <div
+          className="absolute pointer-events-none transition-all duration-100 border border-cyan-400/40 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.2)]"
+          style={{
+            left: boxLeft,
+            top: boxTop,
+            width: boxWidth,
+            height: boxHeight,
+          }}
+        >
+          {/* 4 Corner Bracket Reticles */}
+          <div className="absolute -top-1 -left-1 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl shadow-[0_0_8px_#22d3ee]" />
+          <div className="absolute -top-1 -right-1 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr shadow-[0_0_8px_#22d3ee]" />
+          <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-2 border-l-2 border-cyan-400 rounded-bl shadow-[0_0_8px_#22d3ee]" />
+          <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-2 border-r-2 border-cyan-400 rounded-br shadow-[0_0_8px_#22d3ee]" />
 
-          {/* Dynamic Artificial Horizon / Roll Level Line */}
+          {/* Product Lock Status Tag */}
+          <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/80 border border-cyan-400/60 text-[9px] font-mono font-bold text-cyan-300 flex items-center gap-1 shadow-md whitespace-nowrap">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+            <span>TRACKING PRODUCT · {Math.round(orientation.azimuth)}°</span>
+          </div>
+
+          {/* Real-time 3D Feature Keypoints */}
+          {tracking.featurePoints.slice(0, 10).map((pt, idx) => (
+            <div
+              key={idx}
+              className="absolute w-2 h-2 rounded-full bg-emerald-400 border border-white shadow-[0_0_6px_#10b981] animate-ping"
+              style={{
+                left: `${pt.x * 100}%`,
+                top: `${pt.y * 100}%`,
+                animationDuration: `${1.5 + (idx % 3) * 0.4}s`,
+              }}
+            />
+          ))}
+
+          {/* Dynamic Horizon Roll Bar */}
           <div
-            className="absolute w-24 h-0.5 bg-gradient-to-r from-transparent via-emerald-400/70 to-transparent pointer-events-none transition-transform duration-75"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent pointer-events-none transition-transform duration-75"
             style={{
-              transform: `rotate(${-orientation.roll}deg)`,
+              transform: `translate(-50%, -50%) rotate(${-orientation.roll}deg)`,
             }}
           />
+        </div>
 
-          {/* 36-Segment Spatial Dome Radar */}
-          {showDome && (
-            <div className="transition-all duration-300">
-              <AngleCoverageRing
-                sectors={sectors}
-                currentAzimuth={orientation.azimuth}
-                currentElevation={orientation.elevation}
-                isScanning={isScanning}
-                size={Math.min(window.innerWidth * 0.72, 275)}
-              />
-            </div>
-          )}
+        {/* 36-Segment Spatial Dome Radar */}
+        {showDome && (
+          <div className="transition-all duration-300">
+            <AngleCoverageRing
+              sectors={sectors}
+              currentAzimuth={orientation.azimuth}
+              currentElevation={orientation.elevation}
+              isScanning={isScanning}
+              size={Math.min(window.innerWidth * 0.72, 275)}
+            />
+          </div>
+        )}
+
+        {/* Product Shape Selector (Box / Cylinder / Auto) */}
+        <div className="mt-2.5 pointer-events-auto flex items-center gap-1 glass-panel px-1.5 py-1 rounded-full text-[11px] font-semibold">
+          <span className="text-[10px] text-slate-400 px-1 font-mono uppercase">Shape:</span>
+          <button
+            onClick={() => setProductShape('box')}
+            className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
+              productShape === 'box'
+                ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <Box className="w-3.5 h-3.5" />
+            <span>Box / Pkg</span>
+          </button>
+          <button
+            onClick={() => setProductShape('cylinder')}
+            className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
+              productShape === 'cylinder'
+                ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span>Can / Bottle</span>
+          </button>
+          <button
+            onClick={() => setProductShape('auto')}
+            className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
+              productShape === 'auto'
+                ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold shadow'
+                : 'text-slate-400 hover:text-white'
+            }`}
+          >
+            <span>Auto</span>
+          </button>
         </div>
 
         {/* Height Level Switchers (Low / Eye / Top) */}
         {isScanning && (
-          <div className="mt-3 pointer-events-auto flex items-center gap-1 glass-panel p-1 rounded-full text-[11px] font-semibold">
+          <div className="mt-2 pointer-events-auto flex items-center gap-1 glass-panel p-1 rounded-full text-[11px] font-semibold">
             <button
               onClick={() => handleSetHeight(15)}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
                 currentLevel === 'low'
-                  ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-bold shadow-[0_2px_12px_rgba(16,185,129,0.4)]'
+                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -440,9 +546,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             </button>
             <button
               onClick={() => handleSetHeight(35)}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
                 currentLevel === 'mid'
-                  ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-bold shadow-[0_2px_12px_rgba(16,185,129,0.4)]'
+                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -451,9 +557,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             </button>
             <button
               onClick={() => handleSetHeight(70)}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
                 currentLevel === 'top'
-                  ? 'bg-gradient-to-r from-emerald-400 to-teal-400 text-slate-950 font-bold shadow-[0_2px_12px_rgba(16,185,129,0.4)]'
+                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
               }`}
             >
@@ -510,7 +616,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       </aside>
 
       {/* 5. Bottom Controls: Build Hero Button, Shutter, Angle Steppers & Thumbnails */}
-      <footer className="relative z-20 flex flex-col items-center gap-2.5 pb-6 mb-safe w-full">
+      <footer className="relative z-20 flex flex-col items-center gap-2 pb-6 mb-safe w-full">
         {/* HERO FINISH ACTION BUTTON (Appears as soon as ≥ 3 photos captured) */}
         {photos.length >= 3 && (
           <button
@@ -518,7 +624,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             className="shimmer-btn px-6 py-3 rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2.5 shadow-[0_0_24px_rgba(16,185,129,0.55)] active:scale-95 transition-all"
           >
             <Sparkles className="w-4 h-4 fill-slate-950" />
-            <span>Build 3D Model & Download .GLB</span>
+            <span>Build 3D {productShape.toUpperCase()} & Download .GLB</span>
             <span className="px-2 py-0.5 rounded-full bg-slate-950/25 text-slate-950 font-mono text-[11px]">
               {photos.length} views
             </span>
