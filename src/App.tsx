@@ -70,6 +70,15 @@ export const App: React.FC = () => {
     setCurrentScreen('camera');
   };
 
+  const handleReconstructWithUpdatedPhotos = (updatedPhotos: CapturedPhoto[]) => {
+    if (glbResult?.url) {
+      URL.revokeObjectURL(glbResult.url);
+    }
+    setGlbResult(null);
+    setCapturedPhotos(updatedPhotos);
+    setCurrentScreen('processing');
+  };
+
   return (
     <div className="w-full h-full bg-[#090d16] text-white overflow-hidden relative font-sans">
       {currentScreen === 'camera' && (
@@ -94,8 +103,10 @@ export const App: React.FC = () => {
         <ModelViewer3D
           glbUrl={glbResult.url}
           glbBlob={glbResult.blob}
+          photos={capturedPhotos}
           stats={glbResult.stats}
           onRescan={handleRescan}
+          onReconstructWithUpdatedPhotos={handleReconstructWithUpdatedPhotos}
         />
       )}
 

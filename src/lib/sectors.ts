@@ -1,4 +1,5 @@
 import type { AngleSector, HeightLevel } from '../types/scanner';
+export type { AngleSector, HeightLevel };
 
 export const AZIMUTH_COUNT = 12; // 360 / 12 = 30° per sector
 export const HEIGHT_LEVELS: HeightLevel[] = ['low', 'mid', 'top'];

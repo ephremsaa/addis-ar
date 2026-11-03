@@ -19,6 +19,7 @@ import {
   Box,
   Target,
   Maximize2,
+  Wand2,
 } from 'lucide-react';
 import { AngleCoverageRing } from './AngleCoverageRing';
 import {
@@ -32,7 +33,9 @@ import {
 } from '../lib/sectors';
 import { sensorTracker, type OrientationState } from '../lib/sensor-tracker';
 import { productTracker, type ProductTrackingResult } from '../lib/product-tracker';
+import { aiSegmenter } from '../lib/ai-segmenter';
 import { analyzeVideoFrame, captureFrame, type ImageQualityReport } from '../lib/image-analyzer';
+import { getLearnedTips } from '../lib/scan-history';
 import type { CapturedPhoto, ScannerSettings, ProductShape } from '../types/scanner';
 
 interface CameraScannerProps {
@@ -72,23 +75,20 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   settings,
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const liveOverlayRef = useRef<HTMLCanvasElement | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
   // Scanning state
   const [isScanning, setIsScanning] = useState(false);
   const [sectors, setSectors] = useState<AngleSector[]>(createInitialSectors);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
-  const [productShape, setProductShape] = useState<ProductShape>('box');
+  const [productShape, setProductShape] = useState<ProductShape>('auto');
 
-  // Sensor state (Gyro + Optical flow)
-  const [orientation, setOrientation] = useState<OrientationState>({
-    azimuth: 0,
-    elevation: 35,
-    roll: 0,
-    isCalibrated: false,
-    angularVelocity: 0,
-    trackingSource: 'sensors',
-  });
+  // AI Live Segmentation Highlight (Product highlighted, background dimmed)
+  const [showLiveHighlight, setShowLiveHighlight] = useState(true);
+
+  // Sensor state (Gyro + Accelerometer + Optical flow)
+  const [orientation, setOrientation] = useState<OrientationState>(() => sensorTracker.getState());
 
   // Real-time Product Tracking Result
   const [tracking, setTracking] = useState<ProductTrackingResult>({
@@ -203,7 +203,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     };
   }, []);
 
-  // 5. Product Tracking & Frame Analysis Loop
+  // 5. Product Tracking & AI Live Highlight Loop
   useEffect(() => {
     let animId: number;
 
@@ -215,6 +215,25 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         // Run Product Visual Tracker
         const trackRes = productTracker.trackFrame(videoRef.current);
         setTracking(trackRes);
+
+        // Update estimated metric distance to product in sensor tracker
+        if (trackRes.bounds.width > 0) {
+          const estMeters = 0.45 * (0.4 / Math.max(0.15, trackRes.bounds.width));
+          sensorTracker.setEstimatedDistance(estMeters);
+        }
+
+        // Render AI Live Highlight (Product in focus, table/background dimmed)
+        if (showLiveHighlight && liveOverlayRef.current) {
+          const cvs = liveOverlayRef.current;
+          if (cvs.width !== 320 || cvs.height !== 240) {
+            cvs.width = 320;
+            cvs.height = 240;
+          }
+          aiSegmenter.renderLivePreview(videoRef.current, cvs);
+        } else if (liveOverlayRef.current) {
+          const octx = liveOverlayRef.current.getContext('2d');
+          if (octx) octx.clearRect(0, 0, liveOverlayRef.current.width, liveOverlayRef.current.height);
+        }
 
         // Quality check
         const report = analyzeVideoFrame(videoRef.current);
@@ -243,20 +262,28 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isScanning, orientation, sectors]);
+  }, [isScanning, orientation, sectors, showLiveHighlight]);
 
-  // 6. Primary Angle Photo Capture
+  // 6. Primary Angle Photo Capture with Real Camera Pose & AI Segmentation
   const captureCurrentAngle = useCallback(async (manualStep = false) => {
     if (!videoRef.current || videoRef.current.readyState < 2) return;
+
+    // Reject blurry or uncalibrated dark frames
+    if (!qualityReport.isSharp && isScanning) {
+      setLiveTip('Hold camera steady before capturing');
+      return;
+    }
 
     // Find current or nearest uncovered sector
     let currentSector = findSectorForAngle(sectors, orientation.azimuth, orientation.elevation);
     if (!currentSector) {
       currentSector = sectors.find((s) => !s.isCovered) || sectors[0];
     }
+    const targetSectorId = currentSector?.id || `sector-${Math.floor(orientation.azimuth / 30)}`;
 
     try {
       const { blob, dataUrl, thumbnailUrl } = await captureFrame(videoRef.current);
+      const realPose = sensorTracker.getCurrentPose();
 
       const newPhoto: CapturedPhoto = {
         id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
@@ -266,14 +293,15 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         timestamp: Date.now(),
         azimuth: orientation.azimuth,
         elevation: orientation.elevation,
-        sectorId: currentSector.id,
+        sectorId: targetSectorId,
         sharpness: qualityReport.sharpness,
         brightness: qualityReport.brightness,
+        pose: realPose,
       };
 
       // Mark sector as covered
       setSectors((prev) =>
-        prev.map((s) => (s.id === currentSector.id ? { ...s, isCovered: true, photoId: newPhoto.id } : s))
+        prev.map((s) => (s.id === targetSectorId ? { ...s, isCovered: true, photoId: newPhoto.id } : s))
       );
 
       setPhotos((prev) => [...prev, newPhoto]);
@@ -290,6 +318,26 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       setLastCaptureFlash(true);
       setTimeout(() => setLastCaptureFlash(false), 140);
 
+      // Asynchronously trigger AI segmentation for this photo in the background
+      aiSegmenter
+        .segmentPhoto(blob)
+        .then((segRes) => {
+          setPhotos((currentList) =>
+            currentList.map((p) =>
+              p.id === newPhoto.id
+                ? {
+                    ...p,
+                    maskDataUrl: segRes.maskDataUrl,
+                    maskBlob: segRes.maskBlob,
+                    segmentedDataUrl: segRes.segmentedDataUrl,
+                    thumbnailUrl: segRes.segmentedDataUrl, // Update thumbnail to cut-out
+                  }
+                : p
+            )
+          );
+        })
+        .catch((err) => console.warn('Background AI segmentation note:', err));
+
       // Advance azimuth step if requested
       if (manualStep) {
         sensorTracker.stepAngle(30);
@@ -297,7 +345,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     } catch (err) {
       console.error('Frame capture failed:', err);
     }
-  }, [orientation, qualityReport, sectors, settings.hapticFeedback]);
+  }, [orientation, qualityReport, sectors, settings.hapticFeedback, isScanning]);
 
   // 7. Auto-Capture Interval when Hovering over Uncovered Angle
   useEffect(() => {
@@ -321,7 +369,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
       await sensorTracker.requestPermission();
       sensorTracker.calibrateFront();
       setIsScanning(true);
-      setLiveTip('Walk 360° around product');
+      setLiveTip(getLearnedTips('food'));
     }
     await captureCurrentAngle(true);
   };
@@ -376,12 +424,13 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
         className="absolute inset-0 w-full h-full object-cover z-0"
       />
 
-      {/* Futuristic Scanline Overlay */}
-      {isScanning && (
-        <div className="absolute inset-0 pointer-events-none z-10 overflow-hidden opacity-30">
-          <div className="w-full h-1 bg-gradient-to-r from-transparent via-cyan-400 to-transparent shadow-[0_0_15px_#22d3ee] animate-laser-line" />
-        </div>
-      )}
+      {/* AI Live Segmentation Scrim & Product Highlight */}
+      <canvas
+        ref={liveOverlayRef}
+        className={`absolute inset-0 w-full h-full object-cover pointer-events-none z-10 transition-opacity duration-300 ${
+          showLiveHighlight ? 'opacity-100' : 'opacity-0'
+        }`}
+      />
 
       {/* Camera Shutter Flash */}
       <div
@@ -453,10 +502,10 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-2 border-l-2 border-cyan-400 rounded-bl shadow-[0_0_8px_#22d3ee]" />
           <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-2 border-r-2 border-cyan-400 rounded-br shadow-[0_0_8px_#22d3ee]" />
 
-          {/* Product Lock Status Tag */}
+          {/* Product Lock Status Tag with Real Distance */}
           <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/80 border border-cyan-400/60 text-[9px] font-mono font-bold text-cyan-300 flex items-center gap-1 shadow-md whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>TRACKING PRODUCT · {Math.round(orientation.azimuth)}°</span>
+            <span>AI LOCK · {Math.round(orientation.azimuth)}° · {Math.round((orientation.pose?.distanceToProduct || 0.45) * 100)}cm</span>
           </div>
 
           {/* Real-time 3D Feature Keypoints */}
@@ -494,48 +543,12 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           </div>
         )}
 
-        {/* Product Shape Selector (Box / Cylinder / Auto) */}
-        <div className="mt-2.5 pointer-events-auto flex items-center gap-1 glass-panel px-1.5 py-1 rounded-full text-[11px] font-semibold">
-          <span className="text-[10px] text-slate-400 px-1 font-mono uppercase">Shape:</span>
-          <button
-            onClick={() => setProductShape('box')}
-            className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
-              productShape === 'box'
-                ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <Box className="w-3.5 h-3.5" />
-            <span>Box / Pkg</span>
-          </button>
-          <button
-            onClick={() => setProductShape('cylinder')}
-            className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
-              productShape === 'cylinder'
-                ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>Can / Bottle</span>
-          </button>
-          <button
-            onClick={() => setProductShape('auto')}
-            className={`px-3 py-1 rounded-full transition-all flex items-center gap-1 ${
-              productShape === 'auto'
-                ? 'bg-gradient-to-r from-cyan-400 to-teal-400 text-slate-950 font-bold shadow'
-                : 'text-slate-400 hover:text-white'
-            }`}
-          >
-            <span>Auto</span>
-          </button>
-        </div>
-
         {/* Height Level Switchers (Low / Eye / Top) */}
         {isScanning && (
-          <div className="mt-2 pointer-events-auto flex items-center gap-1 glass-panel p-1 rounded-full text-[11px] font-semibold">
+          <div className="mt-3 pointer-events-auto flex items-center gap-1 glass-panel p-1 rounded-full text-[11px] font-semibold">
             <button
               onClick={() => handleSetHeight(15)}
-              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
                 currentLevel === 'low'
                   ? 'bg-emerald-400 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
@@ -546,7 +559,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             </button>
             <button
               onClick={() => handleSetHeight(35)}
-              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
                 currentLevel === 'mid'
                   ? 'bg-emerald-400 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
@@ -557,7 +570,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             </button>
             <button
               onClick={() => handleSetHeight(70)}
-              className={`px-3 py-1 rounded-full transition-all flex items-center gap-1.5 ${
+              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
                 currentLevel === 'top'
                   ? 'bg-emerald-400 text-slate-950 font-bold shadow'
                   : 'text-slate-400 hover:text-white'
@@ -579,6 +592,19 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           title="Flip Camera"
         >
           <SwitchCamera className="w-5 h-5" />
+        </button>
+
+        {/* AI Live Segmentation Toggle */}
+        <button
+          onClick={() => setShowLiveHighlight((v) => !v)}
+          className={`glass-btn w-11 h-11 rounded-full flex items-center justify-center ${
+            showLiveHighlight
+              ? 'text-cyan-300 bg-cyan-500/25 border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]'
+              : 'text-slate-400'
+          }`}
+          title="Toggle AI Product Highlight & Table Cut"
+        >
+          <Wand2 className="w-5 h-5" />
         </button>
 
         {/* Torch / Light */}
@@ -624,14 +650,14 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             className="shimmer-btn px-6 py-3 rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2.5 shadow-[0_0_24px_rgba(16,185,129,0.55)] active:scale-95 transition-all"
           >
             <Sparkles className="w-4 h-4 fill-slate-950" />
-            <span>Build 3D {productShape.toUpperCase()} & Download .GLB</span>
+            <span>Build Real 3D Model & Download .GLB</span>
             <span className="px-2 py-0.5 rounded-full bg-slate-950/25 text-slate-950 font-mono text-[11px]">
               {photos.length} views
             </span>
           </button>
         )}
 
-        {/* Thumbnail Strip of Angle Photos */}
+        {/* Thumbnail Strip of Angle Photos (with AI Cut-out preview) */}
         {photos.length > 0 && (
           <div className="w-full px-4 flex items-center gap-2.5 overflow-x-auto scrollbar-none py-1">
             <div className="glass-pill px-3 py-1 rounded-full text-[11px] font-bold text-emerald-400 shrink-0 font-mono flex items-center gap-1.5">
@@ -641,9 +667,9 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             {photos.slice(-12).map((p, idx) => (
               <div key={p.id || idx} className="relative shrink-0">
                 <img
-                  src={p.thumbnailUrl}
+                  src={p.segmentedDataUrl || p.thumbnailUrl}
                   alt="Angle view"
-                  className="w-10 h-10 rounded-full object-cover border-2 border-emerald-400 shadow-lg"
+                  className="w-10 h-10 rounded-full object-cover border-2 border-emerald-400 shadow-lg bg-slate-900"
                 />
                 <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-slate-900 border border-emerald-400 text-[9px] font-mono text-emerald-300 flex items-center justify-center font-bold">
                   {idx + 1}

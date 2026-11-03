@@ -9,30 +9,44 @@ import {
   Sparkles,
   CheckCircle2,
   Box,
-  Share2,
-  Maximize2,
+  Wand2,
   Layers,
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { uploadGlbToSupabase } from '../lib/supabase-client';
+import type { CapturedPhoto, UserPointCorrection } from '../types/scanner';
+import { MaskCorrectionModal } from './MaskCorrectionModal';
 
 interface ModelViewer3DProps {
   glbUrl: string;
   glbBlob: Blob;
+  photos: CapturedPhoto[];
   stats?: { vertices: number; triangles: number; fileSizeMb: number };
   onRescan: () => void;
+  onReconstructWithUpdatedPhotos?: (updatedPhotos: CapturedPhoto[]) => void;
 }
 
 export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
   glbUrl,
   glbBlob,
+  photos,
   stats = { vertices: 1420, triangles: 2840, fileSizeMb: 1.2 },
   onRescan,
+  onReconstructWithUpdatedPhotos,
 }) => {
   const modelViewerRef = useRef<HTMLElement | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [cloudUrl, setCloudUrl] = useState<string | null>(null);
   const [copySuccess, setCopySuccess] = useState(false);
+
+  // Mask Correction State
+  const [isFixModalOpen, setIsFixModalOpen] = useState(false);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState(0);
+  const [allPhotos, setAllPhotos] = useState<CapturedPhoto[]>(photos);
+
+  useEffect(() => {
+    setAllPhotos(photos);
+  }, [photos]);
 
   // Trigger celebratory confetti burst on load
   useEffect(() => {
@@ -80,6 +94,29 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
     }
   };
 
+  const handleSaveCorrection = (
+    photoId: string,
+    updatedMaskUrl: string,
+    updatedSegUrl: string,
+    corrections: UserPointCorrection[]
+  ) => {
+    const updated = allPhotos.map((p) =>
+      p.id === photoId
+        ? {
+            ...p,
+            maskDataUrl: updatedMaskUrl,
+            segmentedDataUrl: updatedSegUrl,
+            userCorrections: corrections,
+          }
+        : p
+    );
+    setAllPhotos(updated);
+
+    if (onReconstructWithUpdatedPhotos) {
+      onReconstructWithUpdatedPhotos(updated);
+    }
+  };
+
   return (
     <div className="relative w-full h-full bg-[#07090e] flex flex-col justify-between overflow-hidden select-none font-sans">
       {/* Dynamic Ambient Studio Vignette */}
@@ -100,7 +137,7 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
         {/* Ready Badge */}
         <div className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 text-xs font-semibold text-emerald-400">
           <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-          <span>3D Mesh Ready</span>
+          <span>Product Reconstructed</span>
         </div>
 
         {/* Cloud Upload Button */}
@@ -133,7 +170,6 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
 
       {/* 2. Interactive Google <model-viewer> Viewport */}
       <main className="relative z-10 flex-1 w-full h-full flex flex-col items-center justify-center p-2">
-        {/* Interactive Model Viewer Element */}
         {React.createElement('model-viewer', {
           ref: modelViewerRef,
           src: glbUrl,
@@ -164,6 +200,17 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
           <span className="text-slate-600">·</span>
           <span className="text-emerald-400 font-semibold">{stats.fileSizeMb} MB .GLB</span>
         </div>
+
+        {/* Floating Fix Cut-Out Button */}
+        {allPhotos.length > 0 && (
+          <button
+            onClick={() => setIsFixModalOpen(true)}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 glass-btn px-4 py-2 rounded-full flex items-center gap-2 text-xs font-semibold text-cyan-300 shadow-xl border-cyan-400/40 hover:bg-cyan-500/20 active:scale-95 transition-all"
+          >
+            <Wand2 className="w-4 h-4 text-cyan-400" />
+            <span>Fix the Cut-out (AI Refinement)</span>
+          </button>
+        )}
       </main>
 
       {/* 3. Bottom Modern Action Deck */}
@@ -201,10 +248,18 @@ export const ModelViewer3D: React.FC<ModelViewer3DProps> = ({
           </span>
           <span className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-amber-400/80" />
-            Universal .GLB
+            Clean AI Mesh
           </span>
         </div>
       </footer>
+
+      {/* Mask Correction & AI Teaching Modal */}
+      <MaskCorrectionModal
+        isOpen={isFixModalOpen}
+        onClose={() => setIsFixModalOpen(false)}
+        photo={allPhotos[selectedPhotoIndex] || null}
+        onSaveCorrection={handleSaveCorrection}
+      />
     </div>
   );
 };

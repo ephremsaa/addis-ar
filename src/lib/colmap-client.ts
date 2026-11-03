@@ -46,14 +46,25 @@ export async function runColmapPipeline(
     );
   }
 
-  // Upload photos
-  onProgress(12, 'Uploading', `Uploading ${photos.length} angle photos to server...`);
+  // Upload photos, masks, and poses
+  onProgress(12, 'Uploading', `Uploading ${photos.length} angle photos, AI masks & sensor poses...`);
   const formData = new FormData();
   formData.append('quality', 'standard');
+
+  const posesData = photos.map((p, idx) => ({
+    index: idx,
+    azimuth: p.azimuth,
+    elevation: p.elevation,
+    pose: p.pose,
+  }));
+  formData.append('poses', JSON.stringify(posesData));
 
   for (let i = 0; i < photos.length; i++) {
     const p = photos[i];
     formData.append('photos', p.blob, `angle_${i.toString().padStart(3, '0')}.jpg`);
+    if (p.maskBlob) {
+      formData.append('masks', p.maskBlob, `angle_${i.toString().padStart(3, '0')}.png`);
+    }
   }
 
   const uploadRes = await fetch(`${url}/api/reconstruct`, {

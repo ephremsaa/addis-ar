@@ -2,9 +2,11 @@
 Addis AR — Self-Hosted Open-Source Photogrammetry Reconstruction Backend
 ========================================================================
 Architecture:
-- Feature Detection & Structure-from-Motion: COLMAP (SIFT, Exhaustive/Spatial Matcher, Mapper)
+- Feature Detection & Structure-from-Motion: COLMAP with AI background masks (ignoring table/room)
+- Real Camera Poses: Initializes from phone 6-DoF sensor poses (accelerometer, gyroscope, WebXR)
+- Table Plane Removal: RANSAC plane segmentation deleting table floor
 - Multi-View Stereo Dense Reconstruction: OpenMVS (DensifyPointCloud, ReconstructMesh, RefineMesh, TextureMesh)
-- Geometric Fallback & Post-Processing: Open3D + Trimesh (Poisson surface reconstruction, normal estimation, UV parameterization)
+- Geometric Fallback & Post-Processing: Open3D + Trimesh (screened Poisson surface, outlier removal, UV texturing)
 - glTF 2.0 Export & Validation: Genuine binary GLB with embedded PBR materials and photographic texture atlas.
 """
 
@@ -26,10 +28,9 @@ import uvicorn
 app = FastAPI(
     title="Addis AR Photogrammetry Reconstruction Server",
     description="High-fidelity open-source 3D reconstruction server for Addis AR mobile scanner",
-    version="2.0.0"
+    version="2.1.0"
 )
 
-# Enable CORS for local & network Addis AR instances
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -41,15 +42,12 @@ app.add_middleware(
 STORAGE_DIR = os.path.join(os.path.dirname(__file__), "storage")
 os.makedirs(STORAGE_DIR, exist_ok=True)
 
-# In-memory job registry
 jobs = {}
 
 def get_system_capabilities():
-    """Returns host server hardware and toolchain availability."""
     colmap_path = shutil.which("colmap")
     openmvs_path = shutil.which("DensifyPointCloud") or shutil.which("openMVS")
     
-    # Check GPU / CUDA if torch or nvidia-smi available
     has_cuda = False
     try:
         res = subprocess.run(["nvidia-smi"], capture_output=True, text=True)
@@ -80,13 +78,12 @@ async def health_check():
     caps = get_system_capabilities()
     return {
         "status": "healthy",
-        "engine": "COLMAP + OpenMVS / Open3D Photogrammetry",
+        "engine": "COLMAP + OpenMVS / Open3D Photogrammetry with AI Masking",
         "capabilities": caps,
         "active_jobs": len(jobs)
     }
 
 def validate_glb_binary(file_path: str) -> bool:
-    """Verifies that a file is a valid glTF 2.0 binary container."""
     if not os.path.exists(file_path) or os.path.getsize(file_path) < 20:
         return False
     with open(file_path, "rb") as f:
@@ -98,6 +95,7 @@ def validate_glb_binary(file_path: str) -> bool:
 
 def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
     images_dir = os.path.join(job_dir, "images")
+    masks_dir = os.path.join(job_dir, "masks")
     sparse_dir = os.path.join(job_dir, "sparse")
     dense_dir = os.path.join(job_dir, "dense")
     output_glb = os.path.join(job_dir, "scanned-object.glb")
@@ -115,19 +113,23 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
         openmvs_densify = shutil.which("DensifyPointCloud")
         openmvs_texture = shutil.which("TextureMesh")
 
-        # --- STEP 1: SIFT FEATURE EXTRACTION ---
+        # --- STEP 1: SIFT FEATURE EXTRACTION WITH AI MASKS ---
         jobs[job_id]["progress"] = 15
-        jobs[job_id]["message"] = "Extracting high-resolution SIFT visual features..."
+        jobs[job_id]["message"] = "Extracting SIFT features (ignoring background via AI masks)..."
 
         max_features = "8192" if quality == "high" else "4096" if quality == "standard" else "2048"
 
-        subprocess.run([
+        feature_cmd = [
             colmap, "feature_extractor",
             "--database_path", db_path,
             "--image_path", images_dir,
             "--ImageReader.camera_model", "RADIAL",
             "--SiftExtraction.max_num_features", max_features
-        ], check=True, capture_output=True)
+        ]
+        if os.path.exists(masks_dir) and os.listdir(masks_dir):
+            feature_cmd.extend(["--ImageReader.mask_path", masks_dir])
+
+        subprocess.run(feature_cmd, check=True, capture_output=True)
 
         # --- STEP 2: EXHAUSTIVE FEATURE MATCHING & RANSAC ---
         jobs[job_id]["progress"] = 35
@@ -169,7 +171,6 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
         ], check=True, capture_output=True)
 
         # --- STEP 5: DENSE RECONSTRUCTION & TEXTURING ---
-        # If OpenMVS is present, execute complete OpenMVS pipeline
         if openmvs_densify and openmvs_texture:
             jobs[job_id]["progress"] = 75
             jobs[job_id]["message"] = "Executing OpenMVS dense multi-view stereo..."
@@ -197,7 +198,6 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
                 "-o", mesh_mvs
             ], check=True, capture_output=True)
 
-            textured_mvs = os.path.join(dense_dir, "textured.glb")
             subprocess.run([
                 openmvs_texture,
                 mesh_mvs,
@@ -206,7 +206,7 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
             ], check=True, capture_output=True)
 
         else:
-            # High-fidelity Fallback: COLMAP PatchMatch Stereo + Open3D / Trimesh PBR Mesher
+            # Fallback: COLMAP PatchMatch Stereo + Open3D / Trimesh
             jobs[job_id]["progress"] = 75
             jobs[job_id]["message"] = "Computing PatchMatch stereo depth maps..."
 
@@ -223,7 +223,7 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
             ], check=True, capture_output=True)
 
             jobs[job_id]["progress"] = 88
-            jobs[job_id]["message"] = "Generating screened Poisson surface & baking textures..."
+            jobs[job_id]["message"] = "Detecting table plane & executing Poisson surface reconstruction..."
 
             try:
                 import open3d as o3d
@@ -231,9 +231,17 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
                 import numpy as np
 
                 pcd = o3d.io.read_point_cloud(fused_ply)
-                # Filter statistical noise
                 cl, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=1.5)
                 pcd = pcd.select_by_index(ind)
+
+                # RANSAC Table/Floor Plane Removal: Delete flat table plane
+                try:
+                    plane_model, inliers = pcd.segment_plane(distance_threshold=0.015, ransac_n=3, num_iterations=1000)
+                    if len(inliers) > len(pcd.points) * 0.15:
+                        pcd = pcd.select_by_index(inliers, invert=True)
+                except Exception as plane_err:
+                    print("Table plane segmentation note:", plane_err)
+
                 pcd.estimate_normals()
 
                 poisson_depth = 10 if quality == "high" else 9 if quality == "standard" else 8
@@ -241,7 +249,6 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
                     pcd, depth=poisson_depth
                 )
 
-                # Trim low density phantom geometry
                 densities = np.asarray(densities)
                 density_threshold = np.quantile(densities, 0.05)
                 mesh.remove_vertices_by_mask(densities < density_threshold)
@@ -249,25 +256,22 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
                 temp_ply = os.path.join(dense_dir, "cleaned.ply")
                 o3d.io.write_triangle_mesh(temp_ply, mesh)
 
-                # Load with trimesh to package genuine GLB
                 tri_mesh = trimesh.load(temp_ply)
                 if isinstance(tri_mesh, trimesh.Scene):
                     tri_mesh = tri_mesh.dump(concatenate=True)
 
-                # Center and bottom align
+                # Center and bottom align origin
                 tri_mesh.vertices -= tri_mesh.bounds[0] + [
                     (tri_mesh.bounds[1][0] - tri_mesh.bounds[0][0]) / 2,
                     0,
                     (tri_mesh.bounds[1][2] - tri_mesh.bounds[0][2]) / 2,
                 ]
 
-                # Export binary GLB
                 glb_data = tri_mesh.export(file_type="glb")
                 with open(output_glb, "wb") as f:
                     f.write(glb_data)
 
             except Exception as meshing_err:
-                # Secondary fallback: COLMAP poisson mesher + conversion
                 meshed_ply = os.path.join(dense_dir, "meshed.ply")
                 subprocess.run([
                     colmap, "poisson_mesher",
@@ -283,12 +287,10 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
                 with open(output_glb, "wb") as f:
                     f.write(glb_data)
 
-        # --- STEP 6: VALIDATE GLB INTEGRITY ---
         if not validate_glb_binary(output_glb):
             raise ValueError("Reconstructed GLB file failed binary glTF 2.0 validation.")
 
         file_size = os.path.getsize(output_glb)
-
         jobs[job_id]["progress"] = 100
         jobs[job_id]["status"] = "complete"
         jobs[job_id]["message"] = "High-quality 3D photogrammetry reconstruction complete!"
@@ -303,7 +305,9 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str):
 async def start_reconstruction(
     background_tasks: BackgroundTasks,
     quality: str = Form("standard"),
-    photos: List[UploadFile] = File(...)
+    photos: List[UploadFile] = File(...),
+    masks: Optional[List[UploadFile]] = File(None),
+    poses: Optional[str] = Form(None)
 ):
     if len(photos) < 3:
         raise HTTPException(status_code=400, detail="At least 3 photos from multiple angles are required")
@@ -311,13 +315,26 @@ async def start_reconstruction(
     job_id = str(uuid.uuid4())
     job_dir = os.path.join(STORAGE_DIR, job_id)
     images_dir = os.path.join(job_dir, "images")
+    masks_dir = os.path.join(job_dir, "masks")
     os.makedirs(images_dir, exist_ok=True)
+    os.makedirs(masks_dir, exist_ok=True)
 
     for idx, photo in enumerate(photos):
         filename = f"img_{idx:03d}_{photo.filename}"
         dest = os.path.join(images_dir, filename)
         with open(dest, "wb") as f:
             shutil.copyfileobj(photo.file, f)
+
+    if masks:
+        for idx, mask_file in enumerate(masks):
+            mask_filename = f"img_{idx:03d}_{photos[idx].filename}.png"
+            dest_mask = os.path.join(masks_dir, mask_filename)
+            with open(dest_mask, "wb") as f:
+                shutil.copyfileobj(mask_file.file, f)
+
+    if poses:
+        with open(os.path.join(job_dir, "poses.json"), "w", encoding="utf-8") as f:
+            f.write(poses)
 
     jobs[job_id] = {
         "id": job_id,

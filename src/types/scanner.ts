@@ -13,6 +13,20 @@ export interface AngleSector {
   photoId?: string;
 }
 
+export interface CameraPose {
+  position: [number, number, number]; // [x, y, z] in meters relative to product
+  rotation: [number, number, number]; // [pitch, roll, yaw] in degrees
+  quaternion: [number, number, number, number]; // [qx, qy, qz, qw]
+  source: 'webxr' | 'sensor_fusion' | 'visual_odometry' | 'optical';
+  distanceToProduct: number; // estimated distance in meters
+}
+
+export interface UserPointCorrection {
+  x: number; // 0..1
+  y: number; // 0..1
+  isPositive: boolean; // true = keep, false = cut
+}
+
 export interface CapturedPhoto {
   id: string;
   dataUrl: string;
@@ -24,6 +38,11 @@ export interface CapturedPhoto {
   sectorId: string;
   sharpness: number;
   brightness: number;
+  pose?: CameraPose;
+  maskDataUrl?: string;
+  maskBlob?: Blob;
+  segmentedDataUrl?: string;
+  userCorrections?: UserPointCorrection[];
 }
 
 export interface LiveGuidance {
@@ -42,6 +61,7 @@ export interface ScannerSettings {
   supabaseUrl: string;
   supabaseAnonKey: string;
   productShape?: ProductShape;
+  showLiveSegmentation?: boolean;
 }
 
 export interface ReconstructionJob {
