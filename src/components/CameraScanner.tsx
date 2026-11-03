@@ -1,42 +1,43 @@
-import React, { useRef, useState, useEffect, useCallback } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import {
-  SwitchCamera,
+  Camera,
+  RotateCw,
   Zap,
   ZapOff,
-  SlidersHorizontal,
-  Compass,
-  Sparkles,
-  Camera,
+  Sliders,
   CheckCircle2,
+  Sparkles,
+  ArrowRight,
   RotateCcw,
-  ChevronLeft,
-  ChevronRight,
-  Layers,
-  ArrowUp,
-  ArrowDown,
-  Activity,
-  Scan,
-  Box,
   Target,
-  Maximize2,
   Wand2,
+  AlertTriangle,
 } from 'lucide-react';
 import { AngleCoverageRing } from './AngleCoverageRing';
 import {
-  type AngleSector,
-  createInitialSectors,
-  findSectorForAngle,
-  getCoverageStats,
-  getMissingAnglesGuidance,
-  TOTAL_SECTORS,
-  determineHeightLevel,
+  createInitialTargetSlots,
+  findSlotForAngle,
+  getGuidedAngleInstruction,
+  getSlotStats,
+  REQUIRED_SLOT_COUNT,
+  type TargetAngleSlot,
 } from '../lib/sectors';
 import { sensorTracker, type OrientationState } from '../lib/sensor-tracker';
 import { productTracker, type ProductTrackingResult } from '../lib/product-tracker';
 import { aiSegmenter } from '../lib/ai-segmenter';
-import { analyzeVideoFrame, captureFrame, type ImageQualityReport } from '../lib/image-analyzer';
-import { getLearnedTips } from '../lib/scan-history';
-import type { CapturedPhoto, ScannerSettings, ProductShape } from '../types/scanner';
+import {
+  analyzeVideoFrame,
+  captureFrame,
+  scoreCapturedPhotoQuality,
+  createTightlyCroppedProduct,
+  type ImageQualityReport,
+} from '../lib/image-analyzer';
+import type {
+  CapturedPhoto,
+  ScannerSettings,
+  ProductShape,
+  TargetAngleId,
+} from '../types/scanner';
 
 interface CameraScannerProps {
   onFinishScan: (photos: CapturedPhoto[], shape: ProductShape) => void;
@@ -47,7 +48,9 @@ interface CameraScannerProps {
 // Crisp shutter click sound using Web Audio API
 function playShutterSound() {
   try {
-    const AudioContextClass = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioContextClass =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     if (!AudioContextClass) return;
     const ctx = new AudioContextClass();
     const osc = ctx.createOscillator();
@@ -78,10 +81,10 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const liveOverlayRef = useRef<HTMLCanvasElement | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  // Scanning state
-  const [isScanning, setIsScanning] = useState(false);
-  const [sectors, setSectors] = useState<AngleSector[]>(createInitialSectors);
+  // 8 Target Slots State
+  const [slots, setSlots] = useState<TargetAngleSlot[]>(createInitialTargetSlots);
   const [photos, setPhotos] = useState<CapturedPhoto[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
   const [productShape, setProductShape] = useState<ProductShape>('auto');
 
   // AI Live Segmentation Highlight (Product highlighted, background dimmed)
@@ -106,22 +109,25 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
   const [hasTorch, setHasTorch] = useState(false);
   const [isTorchOn, setIsTorchOn] = useState(false);
-  const [showDome, setShowDome] = useState(true);
 
   // Quality & Feedback
   const [qualityReport, setQualityReport] = useState<ImageQualityReport>({
     isSharp: true,
-    sharpness: 10,
+    sharpness: 50,
     isTooDark: false,
     brightness: 120,
   });
   const [liveTip, setLiveTip] = useState<string>('Point at product & tap capture');
   const [lastCaptureFlash, setLastCaptureFlash] = useState(false);
+  const [lastQualityWarning, setLastQualityWarning] = useState<string | null>(null);
+  const [isCapturing, setIsCapturing] = useState(false);
 
-  // Progress stats
-  const stats = getCoverageStats(sectors);
+  // Guided Angle Computations
+  const stats = getSlotStats(slots);
+  const guided = getGuidedAngleInstruction(slots, orientation.azimuth, orientation.elevation);
+  const activeSlot = findSlotForAngle(slots, orientation.azimuth, orientation.elevation);
 
-  // 1. Initialize Camera
+  // 1. Initialize Camera Stream
   useEffect(() => {
     let currentStream: MediaStream | null = null;
 
@@ -189,7 +195,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     setFacingMode((prev) => (prev === 'environment' ? 'user' : 'environment'));
   };
 
-  // 4. Start Sensor & Optical Tracking
+  // 4. Start Sensor & Motion Tracking
   useEffect(() => {
     const unsub = sensorTracker.subscribe((state) => {
       setOrientation(state);
@@ -209,20 +215,16 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
     const loop = () => {
       if (videoRef.current && videoRef.current.readyState >= 2) {
-        // Run Optical flow displacement tracking
         sensorTracker.processVideoFrame(videoRef.current);
-
-        // Run Product Visual Tracker
         const trackRes = productTracker.trackFrame(videoRef.current);
         setTracking(trackRes);
 
-        // Update estimated metric distance to product in sensor tracker
         if (trackRes.bounds.width > 0) {
           const estMeters = 0.45 * (0.4 / Math.max(0.15, trackRes.bounds.width));
           sensorTracker.setEstimatedDistance(estMeters);
         }
 
-        // Render AI Live Highlight (Product in focus, table/background dimmed)
+        // Render AI Live Highlight (Product highlighted, table dimmed)
         if (showLiveHighlight && liveOverlayRef.current) {
           const cvs = liveOverlayRef.current;
           if (cvs.width !== 320 || cvs.height !== 240) {
@@ -235,16 +237,16 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           if (octx) octx.clearRect(0, 0, liveOverlayRef.current.width, liveOverlayRef.current.height);
         }
 
-        // Quality check
+        // Frame quality
         const report = analyzeVideoFrame(videoRef.current);
         setQualityReport(report);
 
-        // Live Contextual Guidance Tips
+        // Contextual Guidance
         if (isScanning) {
-          if (orientation.angularVelocity > 50) {
+          if (orientation.angularVelocity > 45) {
             setLiveTip('Move slower');
           } else if (report.isTooDark) {
-            setLiveTip('Scene too dark · Add lighting');
+            setLiveTip('Too dark · Increase lighting');
           } else if (!report.isSharp) {
             setLiveTip('Hold steady to focus');
           } else if (trackRes.distanceFeedback === 'too_far') {
@@ -252,8 +254,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           } else if (trackRes.distanceFeedback === 'too_close') {
             setLiveTip('Step back slightly');
           } else {
-            const guidance = getMissingAnglesGuidance(sectors, orientation.azimuth, orientation.elevation);
-            setLiveTip(guidance);
+            setLiveTip(guided.instruction);
           }
         }
       }
@@ -262,190 +263,195 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
 
     animId = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(animId);
-  }, [isScanning, orientation, sectors, showLiveHighlight]);
+  }, [isScanning, orientation, slots, showLiveHighlight, guided.instruction]);
 
-  // 6. Primary Angle Photo Capture with Real Camera Pose & AI Segmentation
-  const captureCurrentAngle = useCallback(async (manualStep = false) => {
-    if (!videoRef.current || videoRef.current.readyState < 2) return;
+  // 6. Capture Angle Photo with AI Scoring & Background Removal
+  const captureSlotPhoto = useCallback(
+    async (targetSlotId?: TargetAngleId) => {
+      if (!videoRef.current || videoRef.current.readyState < 2 || isCapturing) return;
 
-    // Reject blurry or uncalibrated dark frames
-    if (!qualityReport.isSharp && isScanning) {
-      setLiveTip('Hold camera steady before capturing');
-      return;
-    }
+      const slotToCapture = targetSlotId
+        ? slots.find((s) => s.id === targetSlotId)
+        : activeSlot || guided.targetSlot || slots.find((s) => !s.isCaptured) || slots[0];
 
-    // Find current or nearest uncovered sector
-    let currentSector = findSectorForAngle(sectors, orientation.azimuth, orientation.elevation);
-    if (!currentSector) {
-      currentSector = sectors.find((s) => !s.isCovered) || sectors[0];
-    }
-    const targetSectorId = currentSector?.id || `sector-${Math.floor(orientation.azimuth / 30)}`;
+      if (!slotToCapture) return;
 
-    try {
-      const { blob, dataUrl, thumbnailUrl } = await captureFrame(videoRef.current);
-      const realPose = sensorTracker.getCurrentPose();
+      setIsCapturing(true);
 
-      const newPhoto: CapturedPhoto = {
-        id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-        dataUrl,
-        thumbnailUrl,
-        blob,
-        timestamp: Date.now(),
-        azimuth: orientation.azimuth,
-        elevation: orientation.elevation,
-        sectorId: targetSectorId,
-        sharpness: qualityReport.sharpness,
-        brightness: qualityReport.brightness,
-        pose: realPose,
-      };
+      try {
+        const { canvas, blob, dataUrl, thumbnailUrl } = await captureFrame(videoRef.current);
+        const realPose = sensorTracker.getCurrentPose();
 
-      // Mark sector as covered
-      setSectors((prev) =>
-        prev.map((s) => (s.id === targetSectorId ? { ...s, isCovered: true, photoId: newPhoto.id } : s))
-      );
+        // 1. Run AI segmentation and table cutout
+        const segRes = await aiSegmenter.segmentPhoto(blob);
 
-      setPhotos((prev) => [...prev, newPhoto]);
+        // 2. Crop tightly and center on neutral canvas
+        const croppedRes = await createTightlyCroppedProduct(canvas, segRes.maskCanvas);
 
-      // Play audio shutter click
-      playShutterSound();
+        // 3. AI Quality Scoring (0..100%)
+        const qualityScore = scoreCapturedPhotoQuality({
+          imageCanvas: canvas,
+          maskCanvas: segRes.maskCanvas,
+          targetSlotId: slotToCapture.id,
+          azimuth: orientation.azimuth,
+          elevation: orientation.elevation,
+          existingPhotos: photos,
+        });
 
-      // Haptic vibration feedback
-      if (settings.hapticFeedback && typeof navigator !== 'undefined' && navigator.vibrate) {
-        navigator.vibrate([45]);
+        // 4. Quality Gatekeeper: If photo scores < 60%, warn and require retake
+        if (!qualityScore.isAcceptable) {
+          setLastQualityWarning(qualityScore.feedback);
+          setLiveTip(`⚠️ ${qualityScore.feedback}`);
+          if (settings.hapticFeedback && typeof navigator !== 'undefined' && navigator.vibrate) {
+            navigator.vibrate([100, 50, 100]); // double buzz for warning
+          }
+          setIsCapturing(false);
+          return;
+        }
+
+        setLastQualityWarning(null);
+
+        const newPhoto: CapturedPhoto = {
+          id: `photo-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          dataUrl,
+          thumbnailUrl: croppedRes.croppedDataUrl || thumbnailUrl,
+          croppedDataUrl: croppedRes.croppedDataUrl,
+          blob,
+          timestamp: Date.now(),
+          azimuth: orientation.azimuth,
+          elevation: orientation.elevation,
+          sectorId: slotToCapture.id,
+          slotId: slotToCapture.id,
+          sharpness: qualityScore.sharpness,
+          brightness: qualityScore.lighting,
+          pose: realPose,
+          maskDataUrl: segRes.maskDataUrl,
+          maskBlob: segRes.maskBlob,
+          segmentedDataUrl: segRes.segmentedDataUrl,
+          qualityScore,
+        };
+
+        // Update Slot State
+        setSlots((prev) =>
+          prev.map((s) =>
+            s.id === slotToCapture.id
+              ? {
+                  ...s,
+                  isCaptured: true,
+                  capturedPhotoId: newPhoto.id,
+                  qualityScore,
+                  confidence: qualityScore.overall,
+                  isEstimated: false,
+                }
+              : s
+          )
+        );
+
+        // Replace previous photo for this slot if re-taking
+        setPhotos((prev) => {
+          const filtered = prev.filter((p) => p.slotId !== slotToCapture.id);
+          return [...filtered, newPhoto];
+        });
+
+        playShutterSound();
+
+        if (settings.hapticFeedback && typeof navigator !== 'undefined' && navigator.vibrate) {
+          navigator.vibrate([45]);
+        }
+
+        setLastCaptureFlash(true);
+        setTimeout(() => setLastCaptureFlash(false), 140);
+      } catch (err) {
+        console.error('Frame capture error:', err);
+      } finally {
+        setIsCapturing(false);
       }
+    },
+    [activeSlot, guided.targetSlot, isCapturing, orientation, photos, settings.hapticFeedback, slots]
+  );
 
-      // Visual camera shutter flash
-      setLastCaptureFlash(true);
-      setTimeout(() => setLastCaptureFlash(false), 140);
-
-      // Asynchronously trigger AI segmentation for this photo in the background
-      aiSegmenter
-        .segmentPhoto(blob)
-        .then((segRes) => {
-          setPhotos((currentList) =>
-            currentList.map((p) =>
-              p.id === newPhoto.id
-                ? {
-                    ...p,
-                    maskDataUrl: segRes.maskDataUrl,
-                    maskBlob: segRes.maskBlob,
-                    segmentedDataUrl: segRes.segmentedDataUrl,
-                    thumbnailUrl: segRes.segmentedDataUrl, // Update thumbnail to cut-out
-                  }
-                : p
-            )
-          );
-        })
-        .catch((err) => console.warn('Background AI segmentation note:', err));
-
-      // Advance azimuth step if requested
-      if (manualStep) {
-        sensorTracker.stepAngle(30);
-      }
-    } catch (err) {
-      console.error('Frame capture failed:', err);
-    }
-  }, [orientation, qualityReport, sectors, settings.hapticFeedback, isScanning]);
-
-  // 7. Auto-Capture Interval when Hovering over Uncovered Angle
+  // 7. Auto-Capture Trigger when Aimed and Steady
   useEffect(() => {
-    if (!isScanning || !settings.autoCapture) return;
-
-    if (orientation.angularVelocity > 45 || !qualityReport.isSharp || qualityReport.isTooDark) return;
-
-    const targetSector = findSectorForAngle(sectors, orientation.azimuth, orientation.elevation);
-    if (!targetSector || targetSector.isCovered) return;
+    if (!isScanning || isCapturing) return;
 
     const timer = setTimeout(() => {
-      captureCurrentAngle(false);
-    }, 450);
+      // Must be steady (< 25 deg/sec)
+      if (orientation.angularVelocity > 25) return;
+      if (!qualityReport.isSharp || qualityReport.isTooDark) return;
+
+      // Active slot must be uncovered
+      if (activeSlot && !activeSlot.isCaptured) {
+        captureSlotPhoto(activeSlot.id);
+      }
+    }, 750);
 
     return () => clearTimeout(timer);
-  }, [isScanning, orientation, qualityReport, sectors, settings.autoCapture, captureCurrentAngle]);
+  }, [activeSlot, captureSlotPhoto, isCapturing, isScanning, orientation.angularVelocity, qualityReport]);
 
-  // 8. Capture Button Tap Handler
-  const handleCaptureButtonClick = async () => {
+  // Start / Stop Scanner
+  const handleToggleScan = () => {
     if (!isScanning) {
-      await sensorTracker.requestPermission();
-      sensorTracker.calibrateFront();
       setIsScanning(true);
-      setLiveTip(getLearnedTips('food'));
+      setLiveTip('Aim at product front view to begin');
+    } else if (stats.isReady) {
+      // Finish and proceed to 3D generation
+      onFinishScan(photos, productShape);
+    } else {
+      setIsScanning(false);
     }
-    await captureCurrentAngle(true);
   };
 
-  // 9. Steppers, Calibration & Elevation Handlers
-  const handleStepPrev = () => sensorTracker.stepAngle(-30);
-  const handleStepNext = () => sensorTracker.stepAngle(30);
-  const handleSetHeight = (elev: number) => sensorTracker.setElevation(elev);
+  // Calibrate Front heading to 0°
   const handleCalibrateFront = () => {
-    sensorTracker.calibrateFront();
-    setLiveTip('Front set to 0°');
+    sensorTracker.resetAzimuthToZero();
+    setLiveTip('Calibrated! Current direction is Front (0°)');
   };
 
-  // 10. Finish Scan Handler
-  const handleFinishScan = () => {
-    if (photos.length < 3) {
-      setLiveTip('Capture at least 3 photos to build 3D model');
-      return;
-    }
-    onFinishScan(photos, productShape);
-  };
-
-  // 11. Reset Scan
+  // Reset scan
   const handleResetScan = () => {
-    setSectors(createInitialSectors());
+    setSlots(createInitialTargetSlots());
     setPhotos([]);
     setIsScanning(false);
-    sensorTracker.resetCalibration();
     setLiveTip('Point at product & tap capture');
   };
 
-  // Circular progress calculations
-  const btnRadius = 38;
-  const btnCircumference = 2 * Math.PI * btnRadius;
-  const strokeDashoffset = btnCircumference - (stats.percent / 100) * btnCircumference;
-  const currentLevel = determineHeightLevel(orientation.elevation);
-
-  // Tracked bounds style in viewport percentages
-  const boxLeft = `${Math.max(10, Math.min(80, (tracking.bounds.x - tracking.bounds.width / 2) * 100))}%`;
-  const boxTop = `${Math.max(15, Math.min(75, (tracking.bounds.y - tracking.bounds.height / 2) * 100))}%`;
-  const boxWidth = `${Math.max(25, Math.min(80, tracking.bounds.width * 100))}%`;
-  const boxHeight = `${Math.max(25, Math.min(75, tracking.bounds.height * 100))}%`;
+  const boxWidth = Math.round(tracking.bounds.width * window.innerWidth);
+  const boxHeight = Math.round(tracking.bounds.height * window.innerHeight);
+  const boxLeft = Math.round((tracking.bounds.x - tracking.bounds.width / 2) * window.innerWidth);
+  const boxTop = Math.round((tracking.bounds.y - tracking.bounds.height / 2) * window.innerHeight);
 
   return (
-    <div className="relative w-full h-full overflow-hidden bg-[#07090e] flex flex-col justify-between select-none font-sans">
-      {/* 1. Full-Screen Camera Viewport */}
+    <div className="relative w-full h-full bg-black overflow-hidden select-none font-sans">
+      {/* 1. Live Camera Stream */}
       <video
         ref={videoRef}
         playsInline
         muted
         autoPlay
-        className="absolute inset-0 w-full h-full object-cover z-0"
+        className="absolute inset-0 w-full h-full object-cover"
       />
 
-      {/* AI Live Segmentation Scrim & Product Highlight */}
-      <canvas
-        ref={liveOverlayRef}
-        className={`absolute inset-0 w-full h-full object-cover pointer-events-none z-10 transition-opacity duration-300 ${
-          showLiveHighlight ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
+      {/* AI Live Segmentation Mask Shader Overlay */}
+      {showLiveHighlight && (
+        <canvas
+          ref={liveOverlayRef}
+          className="absolute inset-0 w-full h-full object-cover pointer-events-none transition-opacity duration-200"
+          style={{ opacity: 0.92 }}
+        />
+      )}
 
-      {/* Camera Shutter Flash */}
-      <div
-        className={`absolute inset-0 bg-white pointer-events-none z-30 transition-opacity duration-150 ${
-          lastCaptureFlash ? 'opacity-50' : 'opacity-0'
-        }`}
-      />
+      {/* White Camera Flash Burst */}
+      {lastCaptureFlash && (
+        <div className="absolute inset-0 bg-white pointer-events-none z-50 animate-out fade-out duration-150" />
+      )}
 
-      {/* 2. Top Navigation Bar (Dynamic Island Floating Layout) */}
+      {/* 2. Top VisionOS Glass Bar */}
       <header className="relative z-20 flex items-center justify-between px-4 pt-3 pb-2 mt-safe">
-        {/* Reset / Clear Button */}
+        {/* Reset Scan Button */}
         <button
           onClick={handleResetScan}
-          className="glass-btn w-10 h-10 rounded-full flex items-center justify-center text-slate-200"
-          title="Reset scan"
+          className="glass-btn p-2.5 rounded-full text-slate-300 hover:text-white"
+          title="Reset Scan"
         >
           <RotateCcw className="w-4 h-4" />
         </button>
@@ -464,7 +470,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           </span>
         </div>
 
-        {/* Calibrate 0° Front & Progress Pill */}
+        {/* 0° Front Calibrate & Progress Pill */}
         <div className="flex items-center gap-1.5">
           <button
             onClick={handleCalibrateFront}
@@ -476,17 +482,31 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
           </button>
 
           <div className="glass-pill px-3 py-1.5 rounded-full flex items-center gap-1.5 shrink-0 font-mono">
-            <span className="text-xs font-bold text-emerald-400">{stats.percent}%</span>
-            <span className="text-[10px] text-slate-400 font-medium">
-              {stats.covered}/{TOTAL_SECTORS}
-            </span>
+            <span className="text-xs font-bold text-emerald-400">{stats.capturedRequired}/8</span>
+            <span className="text-[10px] text-slate-400 font-medium">angles</span>
           </div>
         </div>
       </header>
 
-      {/* 3. Center AR HUD & Real-Time Product Tracker Reticle */}
+      {/* Quality Warning Alert Pill if photo was rejected */}
+      {lastQualityWarning && (
+        <div className="relative z-30 mx-4 mt-1 px-3.5 py-2 rounded-xl bg-amber-500/20 border border-amber-500/40 backdrop-blur-xl flex items-center justify-between text-xs text-amber-200 shadow-lg animate-in slide-in-from-top-2">
+          <div className="flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-amber-400 shrink-0" />
+            <span>{lastQualityWarning}</span>
+          </div>
+          <button
+            onClick={() => captureSlotPhoto()}
+            className="px-2.5 py-1 rounded-lg bg-amber-400 text-slate-950 font-bold text-[10px] ml-2 shrink-0"
+          >
+            Retake
+          </button>
+        </div>
+      )}
+
+      {/* 3. Center AR HUD & 8-Slot Guided Angle Ring */}
       <main className="relative z-10 flex-1 flex flex-col items-center justify-center pointer-events-none">
-        {/* Dynamic Product Tracking Bounding Box */}
+        {/* Product Tracking Bounding Reticle */}
         <div
           className="absolute pointer-events-none transition-all duration-100 border border-cyan-400/40 rounded-2xl shadow-[0_0_15px_rgba(34,211,238,0.2)]"
           style={{
@@ -496,260 +516,147 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
             height: boxHeight,
           }}
         >
-          {/* 4 Corner Bracket Reticles */}
           <div className="absolute -top-1 -left-1 w-5 h-5 border-t-2 border-l-2 border-cyan-400 rounded-tl shadow-[0_0_8px_#22d3ee]" />
           <div className="absolute -top-1 -right-1 w-5 h-5 border-t-2 border-r-2 border-cyan-400 rounded-tr shadow-[0_0_8px_#22d3ee]" />
           <div className="absolute -bottom-1 -left-1 w-5 h-5 border-b-2 border-l-2 border-cyan-400 rounded-bl shadow-[0_0_8px_#22d3ee]" />
           <div className="absolute -bottom-1 -right-1 w-5 h-5 border-b-2 border-r-2 border-cyan-400 rounded-br shadow-[0_0_8px_#22d3ee]" />
 
-          {/* Product Lock Status Tag with Real Distance */}
+          {/* Product Lock Status Tag */}
           <div className="absolute -top-6 left-1/2 -translate-x-1/2 px-2.5 py-0.5 rounded-full bg-slate-950/80 border border-cyan-400/60 text-[9px] font-mono font-bold text-cyan-300 flex items-center gap-1 shadow-md whitespace-nowrap">
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span>AI LOCK · {Math.round(orientation.azimuth)}° · {Math.round((orientation.pose?.distanceToProduct || 0.45) * 100)}cm</span>
+            <span>
+              {activeSlot ? activeSlot.label.toUpperCase() : 'AI TRACKING'} · {Math.round(orientation.azimuth)}°
+            </span>
           </div>
-
-          {/* Real-time 3D Feature Keypoints */}
-          {tracking.featurePoints.slice(0, 10).map((pt, idx) => (
-            <div
-              key={idx}
-              className="absolute w-2 h-2 rounded-full bg-emerald-400 border border-white shadow-[0_0_6px_#10b981] animate-ping"
-              style={{
-                left: `${pt.x * 100}%`,
-                top: `${pt.y * 100}%`,
-                animationDuration: `${1.5 + (idx % 3) * 0.4}s`,
-              }}
-            />
-          ))}
-
-          {/* Dynamic Horizon Roll Bar */}
-          <div
-            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-28 h-0.5 bg-gradient-to-r from-transparent via-emerald-400 to-transparent pointer-events-none transition-transform duration-75"
-            style={{
-              transform: `translate(-50%, -50%) rotate(${-orientation.roll}deg)`,
-            }}
-          />
         </div>
 
-        {/* 36-Segment Spatial Dome Radar */}
-        {showDome && (
-          <div className="transition-all duration-300">
-            <AngleCoverageRing
-              sectors={sectors}
-              currentAzimuth={orientation.azimuth}
-              currentElevation={orientation.elevation}
-              isScanning={isScanning}
-              size={Math.min(window.innerWidth * 0.72, 275)}
-            />
-          </div>
-        )}
-
-        {/* Height Level Switchers (Low / Eye / Top) */}
-        {isScanning && (
-          <div className="mt-3 pointer-events-auto flex items-center gap-1 glass-panel p-1 rounded-full text-[11px] font-semibold">
-            <button
-              onClick={() => handleSetHeight(15)}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
-                currentLevel === 'low'
-                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <ArrowDown className="w-3.5 h-3.5" />
-              <span>Low (15°)</span>
-            </button>
-            <button
-              onClick={() => handleSetHeight(35)}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
-                currentLevel === 'mid'
-                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <Layers className="w-3.5 h-3.5" />
-              <span>Eye (35°)</span>
-            </button>
-            <button
-              onClick={() => handleSetHeight(70)}
-              className={`px-3 py-1.5 rounded-full transition-all flex items-center gap-1.5 ${
-                currentLevel === 'top'
-                  ? 'bg-emerald-400 text-slate-950 font-bold shadow'
-                  : 'text-slate-400 hover:text-white'
-              }`}
-            >
-              <ArrowUp className="w-3.5 h-3.5" />
-              <span>Top (70°)</span>
-            </button>
-          </div>
-        )}
+        {/* 8 Guided Angle Slots Ring HUD */}
+        <div className="transition-all duration-300">
+          <AngleCoverageRing
+            slots={slots}
+            activeSlotId={activeSlot?.id}
+            nextRecommendedId={guided.targetSlot?.id}
+            currentAzimuth={orientation.azimuth}
+            currentElevation={orientation.elevation}
+            isScanning={isScanning}
+            size={Math.min(window.innerWidth * 0.78, 295)}
+            onSelectSlot={(slotId) => captureSlotPhoto(slotId as TargetAngleId)}
+          />
+        </div>
       </main>
 
-      {/* 4. Floating Action Dock on Right (VisionOS Style) */}
-      <aside className="absolute right-3.5 top-24 z-20 flex flex-col gap-2.5">
-        {/* Flip Camera */}
+      {/* 4. Right Utility Dock */}
+      <aside className="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-3">
         <button
           onClick={flipCamera}
-          className="glass-btn w-11 h-11 rounded-full flex items-center justify-center text-slate-100"
+          className="glass-btn p-3 rounded-full text-slate-200 active:scale-95 transition-all shadow-lg"
           title="Flip Camera"
         >
-          <SwitchCamera className="w-5 h-5" />
+          <RotateCw className="w-5 h-5" />
         </button>
 
-        {/* AI Live Segmentation Toggle */}
+        {hasTorch && (
+          <button
+            onClick={toggleTorch}
+            className={`glass-btn p-3 rounded-full active:scale-95 transition-all shadow-lg ${
+              isTorchOn ? 'text-amber-300 border-amber-400/60' : 'text-slate-200'
+            }`}
+            title="Toggle Flashlight"
+          >
+            {isTorchOn ? <Zap className="w-5 h-5" /> : <ZapOff className="w-5 h-5" />}
+          </button>
+        )}
+
+        {/* AI Background Removal Toggle */}
         <button
-          onClick={() => setShowLiveHighlight((v) => !v)}
-          className={`glass-btn w-11 h-11 rounded-full flex items-center justify-center ${
-            showLiveHighlight
-              ? 'text-cyan-300 bg-cyan-500/25 border-cyan-400 shadow-[0_0_12px_rgba(34,211,238,0.4)]'
-              : 'text-slate-400'
+          onClick={() => setShowLiveHighlight(!showLiveHighlight)}
+          className={`glass-btn p-3 rounded-full active:scale-95 transition-all shadow-lg ${
+            showLiveHighlight ? 'text-cyan-300 border-cyan-400/60' : 'text-slate-400'
           }`}
-          title="Toggle AI Product Highlight & Table Cut"
+          title="Toggle AI Cut-out Highlight"
         >
           <Wand2 className="w-5 h-5" />
         </button>
 
-        {/* Torch / Light */}
-        {hasTorch && (
-          <button
-            onClick={toggleTorch}
-            className={`glass-btn w-11 h-11 rounded-full flex items-center justify-center ${
-              isTorchOn ? 'text-amber-300 bg-amber-500/25 border-amber-400/60 shadow-[0_0_12px_rgba(251,191,36,0.4)]' : 'text-slate-100'
-            }`}
-            title="Torch"
-          >
-            {isTorchOn ? <Zap className="w-5 h-5 fill-amber-300" /> : <ZapOff className="w-5 h-5" />}
-          </button>
-        )}
-
-        {/* Radar Dome Toggle */}
-        <button
-          onClick={() => setShowDome((p) => !p)}
-          className={`glass-btn w-11 h-11 rounded-full flex items-center justify-center ${
-            showDome ? 'text-cyan-300 bg-cyan-500/20 border-cyan-400/40' : 'text-slate-400'
-          }`}
-          title="Toggle Radar Dome"
-        >
-          <Compass className="w-5 h-5" />
-        </button>
-
-        {/* Settings */}
         <button
           onClick={onOpenSettings}
-          className="glass-btn w-11 h-11 rounded-full flex items-center justify-center text-slate-100"
-          title="Settings"
+          className="glass-btn p-3 rounded-full text-slate-200 active:scale-95 transition-all shadow-lg"
+          title="Scanner Settings"
         >
-          <SlidersHorizontal className="w-5 h-5" />
+          <Sliders className="w-5 h-5" />
         </button>
       </aside>
 
-      {/* 5. Bottom Controls: Build Hero Button, Shutter, Angle Steppers & Thumbnails */}
-      <footer className="relative z-20 flex flex-col items-center gap-2 pb-6 mb-safe w-full">
-        {/* HERO FINISH ACTION BUTTON (Appears as soon as ≥ 3 photos captured) */}
-        {photos.length >= 3 && (
-          <button
-            onClick={handleFinishScan}
-            className="shimmer-btn px-6 py-3 rounded-full bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center gap-2.5 shadow-[0_0_24px_rgba(16,185,129,0.55)] active:scale-95 transition-all"
-          >
-            <Sparkles className="w-4 h-4 fill-slate-950" />
-            <span>Build Real 3D Model & Download .GLB</span>
-            <span className="px-2 py-0.5 rounded-full bg-slate-950/25 text-slate-950 font-mono text-[11px]">
-              {photos.length} views
-            </span>
-          </button>
-        )}
-
-        {/* Thumbnail Strip of Angle Photos (with AI Cut-out preview) */}
-        {photos.length > 0 && (
-          <div className="w-full px-4 flex items-center gap-2.5 overflow-x-auto scrollbar-none py-1">
-            <div className="glass-pill px-3 py-1 rounded-full text-[11px] font-bold text-emerald-400 shrink-0 font-mono flex items-center gap-1.5">
-              <Camera className="w-3.5 h-3.5" />
-              <span>{photos.length} captured</span>
+      {/* 5. Bottom Tray: Clean AI Cut-out Thumbnails Strip */}
+      {photos.length > 0 && (
+        <div className="relative z-20 px-4 pb-2 flex items-center gap-2 overflow-x-auto no-scrollbar">
+          {photos.map((p, idx) => (
+            <div
+              key={p.id}
+              className="relative shrink-0 w-12 h-12 rounded-xl overflow-hidden glass-panel border border-cyan-400/40 shadow-md group"
+            >
+              <img
+                src={p.thumbnailUrl || p.dataUrl}
+                alt={`Angle ${idx + 1}`}
+                className="w-full h-full object-contain bg-slate-900/60"
+              />
+              <span className="absolute bottom-0 inset-x-0 bg-slate-950/80 text-[8px] font-mono font-bold text-center text-emerald-400 py-0.2">
+                {p.qualityScore?.overall || 90}%
+              </span>
             </div>
-            {photos.slice(-12).map((p, idx) => (
-              <div key={p.id || idx} className="relative shrink-0">
-                <img
-                  src={p.segmentedDataUrl || p.thumbnailUrl}
-                  alt="Angle view"
-                  className="w-10 h-10 rounded-full object-cover border-2 border-emerald-400 shadow-lg bg-slate-900"
-                />
-                <span className="absolute -bottom-1 -right-1 w-4 h-4 rounded-full bg-slate-900 border border-emerald-400 text-[9px] font-mono text-emerald-300 flex items-center justify-center font-bold">
-                  {idx + 1}
-                </span>
-              </div>
-            ))}
+          ))}
+        </div>
+      )}
+
+      {/* 6. Bottom Capture & Action Deck */}
+      <footer className="relative z-20 flex flex-col items-center gap-3 px-4 pb-7 mb-safe w-full">
+        {/* If ready (>=6 angles), show Build 3D Model button */}
+        {stats.isReady ? (
+          <button
+            onClick={() => onFinishScan(photos, productShape)}
+            className="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-400 via-teal-400 to-cyan-400 text-slate-950 font-extrabold text-sm flex items-center justify-center gap-2 shadow-[0_0_25px_rgba(16,185,129,0.5)] active:scale-95 transition-all shimmer-btn"
+          >
+            <Sparkles className="w-5 h-5" />
+            <span>Build 3D Model ({stats.capturedRequired}/8 Angles)</span>
+            <ArrowRight className="w-4 h-4 ml-1" />
+          </button>
+        ) : (
+          <div className="flex items-center justify-center w-full relative">
+            {/* Big Round Shutter Button */}
+            <button
+              onClick={() => {
+                if (!isScanning) {
+                  setIsScanning(true);
+                  setLiveTip('Aim at product front view to begin');
+                } else {
+                  captureSlotPhoto();
+                }
+              }}
+              disabled={isCapturing}
+              className={`relative w-20 h-20 rounded-full flex items-center justify-center transition-all active:scale-90 shadow-2xl ${
+                isScanning
+                  ? 'bg-gradient-to-tr from-cyan-500 to-emerald-400 ring-4 ring-cyan-400/30'
+                  : 'bg-white ring-4 ring-white/30'
+              }`}
+            >
+              {isScanning ? (
+                <div className="w-7 h-7 rounded-lg bg-slate-950 flex items-center justify-center">
+                  <Camera className="w-4 h-4 text-emerald-400" />
+                </div>
+              ) : (
+                <Camera className="w-8 h-8 text-slate-900" />
+              )}
+            </button>
           </div>
         )}
 
-        {/* Bottom Shutter & Lateral Angle Steppers */}
-        <div className="flex items-center gap-6 mt-1">
-          {/* Step Angle Left */}
-          {isScanning && (
-            <button
-              onClick={handleStepPrev}
-              className="glass-btn px-3 py-2 rounded-full flex items-center gap-1 text-xs font-semibold text-slate-200 active:scale-90"
-              title="Step Angle Counterclockwise"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              <span className="text-[10px] font-mono">-30°</span>
-            </button>
-          )}
-
-          {/* Big Snapchat/Camera-Style Trigger Button */}
-          <div className="relative flex items-center justify-center">
-            {/* Circular Progress Ring */}
-            <svg className="w-24 h-24 -rotate-90 pointer-events-none">
-              <circle
-                cx="48"
-                cy="48"
-                r={btnRadius}
-                className="text-white/10 stroke-current"
-                strokeWidth="4"
-                fill="transparent"
-              />
-              <circle
-                cx="48"
-                cy="48"
-                r={btnRadius}
-                className="text-emerald-400 stroke-current transition-all duration-300"
-                strokeWidth="4.5"
-                strokeDasharray={btnCircumference}
-                strokeDashoffset={strokeDashoffset}
-                strokeLinecap="round"
-                fill="transparent"
-              />
-            </svg>
-
-            {/* Tap Shutter Button */}
-            <button
-              onClick={handleCaptureButtonClick}
-              className={`absolute w-18 h-18 rounded-full flex items-center justify-center transition-all duration-200 shadow-2xl active:scale-90 ${
-                isScanning
-                  ? 'bg-gradient-to-tr from-slate-100 to-white text-slate-950 border-4 border-emerald-400 shadow-[0_0_20px_rgba(52,211,153,0.5)]'
-                  : 'bg-white text-slate-900 shadow-xl'
-              }`}
-              title="Tap to capture angle photo"
-            >
-              <Camera className="w-8 h-8 text-slate-900" />
-            </button>
-          </div>
-
-          {/* Step Angle Right */}
-          {isScanning && (
-            <button
-              onClick={handleStepNext}
-              className="glass-btn px-3 py-2 rounded-full flex items-center gap-1 text-xs font-semibold text-slate-200 active:scale-90"
-              title="Step Angle Clockwise"
-            >
-              <span className="text-[10px] font-mono">+30°</span>
-              <ChevronRight className="w-4 h-4" />
-            </button>
-          )}
-        </div>
-
-        {/* Micro Guidance Label */}
-        <p className="text-[11px] font-semibold tracking-wider text-slate-400 uppercase font-mono">
-          {isScanning
-            ? 'Tap circle to capture · Orbit product'
-            : 'Tap circle to start 3D scan'}
+        {/* Micro Guidance Status */}
+        <p className="text-[11px] font-medium text-slate-400">
+          {stats.isReady
+            ? '✨ 6+ angles ready! Tap above to build, or scan remaining angles'
+            : isScanning
+            ? `${8 - stats.capturedRequired} angles remaining · Orbit slowly around product`
+            : 'Tap shutter button to start 8-angle scan'}
         </p>
       </footer>
     </div>

@@ -293,6 +293,10 @@ export class SensorTracker {
     this.notify();
   }
 
+  public resetAzimuthToZero(): void {
+    this.calibrateFront();
+  }
+
   public setAzimuth(deg: number): void {
     this.currentAzimuth = (deg + 360) % 360;
     this.integratedOpticalAzimuth = this.currentAzimuth;

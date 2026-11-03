@@ -1,17 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { CameraScanner } from './components/CameraScanner';
 import { ProcessingScreen } from './components/ProcessingScreen';
 import { ModelViewer3D } from './components/ModelViewer3D';
 import { SettingsModal } from './components/SettingsModal';
+import type { Ai3DGenerationResult } from './lib/ai-3d-client';
 import type { CapturedPhoto, ScannerSettings, ProductShape } from './types/scanner';
 
 const DEFAULT_SETTINGS: ScannerSettings = {
   colmapServerUrl: 'http://localhost:8000',
+  aiServerUrl: 'http://localhost:8000',
   autoCapture: true,
   motionSensitivity: 2,
   hapticFeedback: true,
   minCoveragePercent: 100,
-  useColmapBackend: false, // In-browser by default for instant zero-setup mobile demo, toggleable to COLMAP
+  useColmapBackend: false,
+  useAi3dBackend: true,
+  preferredModel: 'trellis',
+  candidateCount: 4,
   supabaseUrl: '',
   supabaseAnonKey: '',
 };
@@ -20,11 +25,7 @@ export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<'camera' | 'processing' | 'viewer'>('camera');
   const [capturedPhotos, setCapturedPhotos] = useState<CapturedPhoto[]>([]);
   const [selectedShape, setSelectedShape] = useState<ProductShape>('auto');
-  const [glbResult, setGlbResult] = useState<{
-    url: string;
-    blob: Blob;
-    stats: { vertices: number; triangles: number; fileSizeMb: number };
-  } | null>(null);
+  const [generationResult, setGenerationResult] = useState<Ai3DGenerationResult | null>(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<ScannerSettings>(() => {
@@ -52,29 +53,30 @@ export const App: React.FC = () => {
     setCurrentScreen('processing');
   };
 
-  const handleProcessingSuccess = (
-    url: string,
-    blob: Blob,
-    stats: { vertices: number; triangles: number; fileSizeMb: number }
-  ) => {
-    setGlbResult({ url, blob, stats });
+  const handleProcessingSuccess = (result: Ai3DGenerationResult) => {
+    setGenerationResult(result);
     setCurrentScreen('viewer');
   };
 
   const handleRescan = () => {
-    if (glbResult?.url) {
-      URL.revokeObjectURL(glbResult.url);
+    if (generationResult?.glbUrl) {
+      URL.revokeObjectURL(generationResult.glbUrl);
     }
-    setGlbResult(null);
+    setGenerationResult(null);
     setCapturedPhotos([]);
     setCurrentScreen('camera');
   };
 
+  const handleRetakeAngle = (slotId: string) => {
+    // Switch to camera with intent to retake specific angle
+    setCurrentScreen('camera');
+  };
+
   const handleReconstructWithUpdatedPhotos = (updatedPhotos: CapturedPhoto[]) => {
-    if (glbResult?.url) {
-      URL.revokeObjectURL(glbResult.url);
+    if (generationResult?.glbUrl) {
+      URL.revokeObjectURL(generationResult.glbUrl);
     }
-    setGlbResult(null);
+    setGenerationResult(null);
     setCapturedPhotos(updatedPhotos);
     setCurrentScreen('processing');
   };
@@ -99,13 +101,17 @@ export const App: React.FC = () => {
         />
       )}
 
-      {currentScreen === 'viewer' && glbResult && (
+      {currentScreen === 'viewer' && generationResult && (
         <ModelViewer3D
-          glbUrl={glbResult.url}
-          glbBlob={glbResult.blob}
+          glbUrl={generationResult.glbUrl}
+          glbBlob={generationResult.glbBlob}
           photos={capturedPhotos}
-          stats={glbResult.stats}
+          matchScore={generationResult.matchScore}
+          sideConfidences={generationResult.sideConfidences}
+          modelName={generationResult.modelName}
+          stats={generationResult.stats}
           onRescan={handleRescan}
+          onRetakeAngle={handleRetakeAngle}
           onReconstructWithUpdatedPhotos={handleReconstructWithUpdatedPhotos}
         />
       )}
@@ -121,4 +127,3 @@ export const App: React.FC = () => {
 };
 
 export default App;
-

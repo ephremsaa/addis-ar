@@ -1,25 +1,24 @@
 import React, { useEffect, useState } from 'react';
 import { Loader2, AlertCircle, RefreshCw, Layers, CheckCircle2, Cpu, Sparkles, Box } from 'lucide-react';
-import { runColmapPipeline } from '../lib/colmap-client';
-import { runClientReconstruction } from '../lib/client-reconstructor';
+import { generate3DModelAi, type Ai3DGenerationResult } from '../lib/ai-3d-client';
 import type { CapturedPhoto, ScannerSettings, ProductShape } from '../types/scanner';
 
 interface ProcessingScreenProps {
   photos: CapturedPhoto[];
   settings: ScannerSettings;
   shape?: ProductShape;
-  onSuccess: (glbUrl: string, glbBlob: Blob, stats: { vertices: number; triangles: number; fileSizeMb: number }) => void;
+  onSuccess: (result: Ai3DGenerationResult) => void;
   onRetry: () => void;
 }
 
 const STAGES = [
-  { id: 'validate', label: '1. Validating 360° Angle Views' },
-  { id: 'match', label: '2. Optical Keypoint Feature Matching' },
-  { id: 'poses', label: '3. Triangulating 6DoF Camera Poses' },
-  { id: 'cloud', label: '4. Generating Dense Point Cloud' },
-  { id: 'mesh', label: '5. Reconstructing Watertight Surface Mesh' },
-  { id: 'texture', label: '6. Projecting UV Photographic Atlas' },
-  { id: 'glb', label: '7. Packaging Binary .GLB File' },
+  { id: 'validate', label: '1. Validating 6-8 Guided Angle Views' },
+  { id: 'masks', label: '2. AI Segmentation & Table Plane Removal' },
+  { id: 'candidates', label: '3. Generating Multi-Candidate 3D Latents' },
+  { id: 'reproject', label: '4. Re-projecting & Probability Match Scoring' },
+  { id: 'winner', label: '5. Selecting Best Probability Candidate' },
+  { id: 'texture', label: '6. Multi-View Photographic Texture Baking' },
+  { id: 'glb', label: '7. Compressing & Exporting Binary .GLB' },
 ];
 
 export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
@@ -29,9 +28,9 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
   onSuccess,
   onRetry,
 }) => {
-  const [progress, setProgress] = useState(5);
-  const [currentStage, setCurrentStage] = useState('Initializing');
-  const [message, setMessage] = useState('Starting 3D reconstruction engine...');
+  const [progress, setProgress] = useState(15);
+  const [currentStage, setCurrentStage] = useState('Initializing Multi-View AI');
+  const [message, setMessage] = useState('Analyzing captured views & sensor angles...');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -41,46 +40,24 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
       try {
         setError(null);
 
-        // Try COLMAP server if enabled, else use client-side generator
-        if (settings.useColmapBackend && settings.colmapServerUrl) {
-          try {
-            const result = await runColmapPipeline(
-              photos,
-              settings.colmapServerUrl,
-              (prog, stage, msg) => {
-                if (!isCancelled) {
-                  setProgress(prog);
-                  setCurrentStage(stage);
-                  setMessage(msg);
-                }
-              }
-            );
-
-            if (!isCancelled) {
-              onSuccess(result.glbUrl, result.glbBlob, result.stats);
-            }
-            return;
-          } catch (colmapErr) {
-            console.warn('COLMAP backend unavailable, falling back to local photogrammetry:', colmapErr);
-            setMessage('COLMAP unavailable — falling back to client-side photogrammetry...');
-          }
-        }
-
-        // Client-side photogrammetry engine
-        const result = await runClientReconstruction(
+        const result = await generate3DModelAi(
           photos,
-          (prog, stage, msg) => {
+          settings,
+          (prog, msg) => {
             if (!isCancelled) {
               setProgress(prog);
-              setCurrentStage(stage);
+              if (prog < 25) setCurrentStage('Validating Views');
+              else if (prog < 50) setCurrentStage('AI Segmentation');
+              else if (prog < 75) setCurrentStage('Generating Candidates');
+              else if (prog < 90) setCurrentStage('Baking Textures');
+              else setCurrentStage('Packaging GLB');
               setMessage(msg);
             }
-          },
-          { shape }
+          }
         );
 
         if (!isCancelled) {
-          onSuccess(result.glbUrl, result.glbBlob, result.stats);
+          onSuccess(result);
         }
       } catch (err: unknown) {
         if (!isCancelled) {
@@ -114,7 +91,7 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
             <p className="text-xs text-rose-300/90 mt-1.5 leading-relaxed font-mono">{error}</p>
           </div>
           <p className="text-[11px] text-slate-400 leading-normal">
-            Ensure the object is stationary, evenly illuminated, and captured with continuous 360° overlap.
+            Ensure the object is stationary, evenly illuminated, and captured with steady 6-8 angle photos.
           </p>
           <button
             onClick={onRetry}
@@ -129,11 +106,11 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
         <div className="relative z-10 glass-panel p-6 rounded-3xl max-w-sm w-full flex flex-col items-center gap-4.5 shadow-2xl border-white/15">
           {/* Holographic Gyroscopic 3D Rings */}
           <div className="relative w-24 h-24 flex items-center justify-center my-1">
-            {/* Outer Ring */}
             <div className="absolute inset-0 rounded-full border border-dashed border-cyan-400/50 animate-spin-slow" />
-            {/* Middle Ring */}
-            <div className="absolute inset-2 rounded-full border border-emerald-400/40 animate-spin" style={{ animationDirection: 'reverse', animationDuration: '6s' }} />
-            {/* Core Box */}
+            <div
+              className="absolute inset-2 rounded-full border border-emerald-400/40 animate-spin"
+              style={{ animationDirection: 'reverse', animationDuration: '6s' }}
+            />
             <div className="w-13 h-13 rounded-2xl bg-gradient-to-tr from-cyan-500/25 to-emerald-400/25 border border-cyan-400/60 flex items-center justify-center backdrop-blur-xl shadow-[0_0_24px_rgba(34,211,238,0.35)]">
               <Box className="w-6 h-6 text-cyan-300 animate-pulse" />
             </div>
@@ -142,10 +119,12 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
           <div>
             <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 text-[10px] font-mono font-bold tracking-wider uppercase mb-1">
               <Sparkles className="w-3 h-3" />
-              <span>3D Neural Reconstruction</span>
+              <span>Multi-View AI 3D Generation</span>
             </div>
             <h2 className="text-base font-bold text-white tracking-tight">{currentStage}</h2>
-            <p className="text-xs text-slate-400 mt-1 font-mono text-[11px] truncate max-w-[280px]">{message}</p>
+            <p className="text-xs text-slate-400 mt-1 font-mono text-[11px] truncate max-w-[280px]">
+              {message}
+            </p>
           </div>
 
           {/* Neon Progress Bar */}
@@ -162,7 +141,7 @@ export const ProcessingScreen: React.FC<ProcessingScreenProps> = ({
             </div>
           </div>
 
-          {/* Photogrammetry Step Tracker */}
+          {/* Pipeline Step Tracker */}
           <div className="w-full flex flex-col gap-1.5 text-left pt-2.5 border-t border-white/10">
             {STAGES.map((st, idx) => {
               const stageNum = idx + 1;

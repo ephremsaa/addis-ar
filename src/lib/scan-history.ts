@@ -115,3 +115,4 @@ export function getLearnedTips(productType: string = 'food'): string {
   const profile = DEFAULT_PROFILES[productType] || DEFAULT_PROFILES.food;
   return `Best for ${profile.productType}: keep phone ~${Math.round(profile.optimalDistanceM * 100)} cm away, angle ~${profile.recommendedElevationDeg}°`;
 }
+

@@ -1,6 +1,15 @@
 import React, { useState } from 'react';
-import { X, Server, Check, AlertCircle, Sparkles, SlidersHorizontal, Database, Smartphone, CheckCircle2 } from 'lucide-react';
-import { checkColmapHealth } from '../lib/colmap-client';
+import {
+  X,
+  Server,
+  Sparkles,
+  SlidersHorizontal,
+  Database,
+  Smartphone,
+  Cpu,
+  CheckCircle2,
+} from 'lucide-react';
+import { checkAiServerHealth } from '../lib/ai-3d-client';
 import type { ScannerSettings } from '../types/scanner';
 
 interface SettingsModalProps {
@@ -22,15 +31,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleTestServer = async () => {
+  const handleTestAiServer = async () => {
     setIsTesting(true);
     setTestResult(null);
-    const res = await checkColmapHealth(formData.colmapServerUrl);
+    const ok = await checkAiServerHealth(formData.aiServerUrl);
     setIsTesting(false);
-    if (res.online) {
-      setTestResult({ ok: true, message: `Connected! Engine: ${res.engine}` });
+    if (ok) {
+      setTestResult({ ok: true, message: 'Connected to GPU AI 3D Server! (Online)' });
     } else {
-      setTestResult({ ok: false, message: res.message || 'Cannot reach server' });
+      setTestResult({
+        ok: false,
+        message: 'Cannot reach server · Will use On-Device Neural Engine',
+      });
     }
   };
 
@@ -41,12 +53,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-xl select-none font-sans">
-      <div className="glass-panel w-full max-w-sm rounded-3xl p-5 flex flex-col gap-4.5 shadow-2xl border-white/15 max-h-[90vh] overflow-y-auto">
+      <div className="glass-panel w-full max-w-sm rounded-3xl p-5 flex flex-col gap-4 shadow-2xl border-white/15 max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-sm font-bold text-white tracking-tight">Studio Settings</h2>
+            <h2 className="text-sm font-bold text-white tracking-tight">Studio & AI Settings</h2>
           </div>
           <button
             onClick={onClose}
@@ -56,90 +68,114 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* 1. Photogrammetry Engine Selection */}
+        {/* 1. Multi-View AI 3D Model Selection */}
         <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold text-slate-300">Reconstruction Engine</label>
+          <label className="text-xs font-semibold text-slate-300">Multi-View 3D Model</label>
           <div className="grid grid-cols-2 gap-2">
             <button
               type="button"
-              onClick={() => setFormData({ ...formData, useColmapBackend: false })}
-              className={`p-3 rounded-2xl border text-left text-xs transition-all ${
-                !formData.useColmapBackend
+              onClick={() => setFormData({ ...formData, preferredModel: 'trellis' })}
+              className={`p-2.5 rounded-2xl border text-left text-xs transition-all ${
+                formData.preferredModel === 'trellis'
                   ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-200 font-bold shadow-[0_0_12px_rgba(34,211,238,0.25)]'
                   : 'border-white/10 bg-slate-900/60 text-slate-400'
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <Smartphone className="w-4 h-4 text-cyan-400" />
-                <span>Client Neural</span>
+                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
+                <span>TRELLIS</span>
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">Instant · Zero-Setup</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">High Fidelity · MIT</span>
             </button>
 
             <button
               type="button"
-              onClick={() => setFormData({ ...formData, useColmapBackend: true })}
-              className={`p-3 rounded-2xl border text-left text-xs transition-all ${
-                formData.useColmapBackend
+              onClick={() => setFormData({ ...formData, preferredModel: 'hunyuan3d' })}
+              className={`p-2.5 rounded-2xl border text-left text-xs transition-all ${
+                formData.preferredModel === 'hunyuan3d'
                   ? 'border-emerald-400/80 bg-emerald-500/20 text-emerald-200 font-bold shadow-[0_0_12px_rgba(16,185,129,0.25)]'
                   : 'border-white/10 bg-slate-900/60 text-slate-400'
               }`}
             >
               <div className="flex items-center gap-1.5">
-                <Server className="w-4 h-4 text-emerald-400" />
-                <span>COLMAP Server</span>
+                <Cpu className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Hunyuan3D-2</span>
               </div>
-              <span className="text-[10px] text-slate-400 block mt-1">High-Res · Python</span>
+              <span className="text-[10px] text-slate-400 block mt-0.5">Texture Synthesis</span>
             </button>
           </div>
         </div>
 
-        {/* 2. COLMAP Server Endpoint Input */}
-        {formData.useColmapBackend && (
-          <div className="flex flex-col gap-1.5 bg-slate-900/60 p-3.5 rounded-2xl border border-white/10">
-            <label className="text-[11px] font-semibold text-slate-300">COLMAP Server URL</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={formData.colmapServerUrl}
-                onChange={(e) => {
-                  setFormData({ ...formData, colmapServerUrl: e.target.value });
-                  setTestResult(null);
-                }}
-                placeholder="http://localhost:8000"
-                className="flex-1 bg-black/50 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
-              />
+        {/* 2. Python FastAPI GPU Server URL */}
+        <div className="flex flex-col gap-1.5 bg-slate-900/60 p-3.5 rounded-2xl border border-white/10">
+          <div className="flex items-center justify-between">
+            <label className="text-[11px] font-semibold text-slate-300">GPU AI Server URL</label>
+            <span className="text-[9px] text-cyan-400">Modal / RunPod / Local</span>
+          </div>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={formData.aiServerUrl}
+              onChange={(e) => {
+                setFormData({ ...formData, aiServerUrl: e.target.value });
+                setTestResult(null);
+              }}
+              placeholder="http://localhost:8000"
+              className="flex-1 bg-black/50 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono"
+            />
+            <button
+              type="button"
+              onClick={handleTestAiServer}
+              disabled={isTesting}
+              className="px-3.5 py-1.5 rounded-xl bg-cyan-400 text-slate-950 text-xs font-bold shrink-0 disabled:opacity-50"
+            >
+              {isTesting ? 'Testing…' : 'Test'}
+            </button>
+          </div>
+          {testResult && (
+            <p
+              className={`text-[10px] font-medium mt-1 ${
+                testResult.ok ? 'text-emerald-400' : 'text-amber-400'
+              }`}
+            >
+              {testResult.message}
+            </p>
+          )}
+        </div>
+
+        {/* 3. Number of Candidate Generations */}
+        <div className="flex items-center justify-between py-1">
+          <div>
+            <span className="text-xs font-semibold text-slate-200 block">Candidate Predictions</span>
+            <span className="text-[10px] text-slate-400">Runs multiple seeds & picks highest match</span>
+          </div>
+          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
+            {[3, 4].map((cnt) => (
               <button
+                key={cnt}
                 type="button"
-                onClick={handleTestServer}
-                disabled={isTesting}
-                className="px-3.5 py-1.5 rounded-xl bg-cyan-400 text-slate-950 text-xs font-bold shrink-0 disabled:opacity-50"
-              >
-                {isTesting ? 'Testing…' : 'Test'}
-              </button>
-            </div>
-            {testResult && (
-              <p
-                className={`text-[11px] font-medium mt-1 ${
-                  testResult.ok ? 'text-emerald-400' : 'text-rose-400'
+                onClick={() => setFormData({ ...formData, candidateCount: cnt })}
+                className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
+                  formData.candidateCount === cnt
+                    ? 'bg-cyan-400 text-slate-950 shadow'
+                    : 'text-slate-400 hover:text-white'
                 }`}
               >
-                {testResult.message}
-              </p>
-            )}
+                {cnt}x
+              </button>
+            ))}
           </div>
-        )}
+        </div>
 
-        {/* 3. Auto-Capture & Haptic Switches (iOS-style toggles) */}
+        {/* 4. Auto-Capture & Haptic Switches */}
         <div className="flex flex-col gap-3 py-1 border-t border-white/10 pt-3">
-          {/* Auto-Capture Toggle */}
           <div
             onClick={() => setFormData({ ...formData, autoCapture: !formData.autoCapture })}
             className="flex items-center justify-between cursor-pointer"
           >
             <div>
               <span className="text-xs font-semibold text-slate-200 block">Auto-Capture Steady Angles</span>
-              <span className="text-[10px] text-slate-400">Snap automatically when hovering</span>
+              <span className="text-[10px] text-slate-400">Captures when phone matches angle</span>
             </div>
             <div
               className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
@@ -154,14 +190,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             </div>
           </div>
 
-          {/* Haptic Feedback Toggle */}
           <div
             onClick={() => setFormData({ ...formData, hapticFeedback: !formData.hapticFeedback })}
             className="flex items-center justify-between cursor-pointer"
           >
             <div>
               <span className="text-xs font-semibold text-slate-200 block">Haptic Vibration on Angle</span>
-              <span className="text-[10px] text-slate-400">Tactile pulse for each angle sector</span>
+              <span className="text-[10px] text-slate-400">Tactile pulse for each captured angle</span>
             </div>
             <div
               className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
@@ -175,28 +210,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
               />
             </div>
           </div>
-        </div>
-
-        {/* 4. Supabase Cloud Storage */}
-        <div className="flex flex-col gap-2 pt-2 border-t border-white/10">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-slate-300">
-            <Database className="w-3.5 h-3.5 text-cyan-400" />
-            <span>Supabase Cloud Storage (Optional)</span>
-          </div>
-          <input
-            type="text"
-            value={formData.supabaseUrl}
-            onChange={(e) => setFormData({ ...formData, supabaseUrl: e.target.value })}
-            placeholder="Supabase Project URL"
-            className="w-full bg-black/50 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono text-[11px]"
-          />
-          <input
-            type="password"
-            value={formData.supabaseAnonKey}
-            onChange={(e) => setFormData({ ...formData, supabaseAnonKey: e.target.value })}
-            placeholder="Supabase Anon Public Key"
-            className="w-full bg-black/50 border border-white/15 rounded-xl px-3 py-1.5 text-xs text-white focus:outline-none focus:border-cyan-400 font-mono text-[11px]"
-          />
         </div>
 
         {/* Save Button */}

@@ -2,15 +2,54 @@ export type HeightLevel = 'low' | 'mid' | 'top';
 
 export type ProductShape = 'box' | 'cylinder' | 'auto';
 
+export type TargetAngleId =
+  | 'front'
+  | 'front_right'
+  | 'right'
+  | 'back_right'
+  | 'back'
+  | 'back_left'
+  | 'left'
+  | 'top'
+  | 'bottom';
+
+export interface PhotoQualityScore {
+  overall: number; // 0..100%
+  sharpness: number; // 0..100%
+  lighting: number; // 0..100%
+  maskQuality: number; // 0..100%
+  framing: number; // 0..100%
+  uniqueness: number; // 0..100%
+  isAcceptable: boolean; // >= 60%
+  feedback: string;
+  isPrimaryFront?: boolean;
+}
+
+export interface TargetAngleSlot {
+  id: TargetAngleId;
+  label: string;
+  shortLabel: string;
+  targetAzimuth: number; // 0, 45, 90, 135, 180, 225, 270
+  targetElevation: number; // 0 (mid), 70 (top), -45 (bottom)
+  isOptional: boolean;
+  isCaptured: boolean;
+  capturedPhotoId?: string;
+  qualityScore?: PhotoQualityScore;
+  confidence?: number;
+  isEstimated?: boolean;
+}
+
+// Retain AngleSector for backward compatibility with radial HUD metrics
 export interface AngleSector {
-  id: string; // e.g. "mid-0", "top-30", "low-60"
-  azimuthIndex: number; // 0..11 (each 30 degrees)
-  azimuthCenter: number; // 0, 30, 60, ..., 330
-  heightLevel: HeightLevel; // 'low' (0-20°), 'mid' (20-50°), 'top' (50-85°)
+  id: string;
+  azimuthIndex: number;
+  azimuthCenter: number;
+  heightLevel: HeightLevel;
   label: string;
   isCovered: boolean;
   capturedAt?: number;
   photoId?: string;
+  qualityScore?: PhotoQualityScore;
 }
 
 export interface CameraPose {
@@ -36,13 +75,16 @@ export interface CapturedPhoto {
   azimuth: number; // 0..360°
   elevation: number; // 0..90°
   sectorId: string;
+  slotId?: TargetAngleId;
   sharpness: number;
   brightness: number;
   pose?: CameraPose;
   maskDataUrl?: string;
   maskBlob?: Blob;
   segmentedDataUrl?: string;
+  croppedDataUrl?: string;
   userCorrections?: UserPointCorrection[];
+  qualityScore?: PhotoQualityScore;
 }
 
 export interface LiveGuidance {
@@ -51,13 +93,31 @@ export interface LiveGuidance {
   suggestedAction: string;
 }
 
+export interface SideConfidence {
+  slotId: TargetAngleId;
+  label: string;
+  confidence: number; // 0..100%
+  isEstimated: boolean; // true if predicted by AI
+  photoQuality?: number;
+}
+
+export interface CandidateEvaluation {
+  seed: number;
+  matchScore: number; // 0..100%
+  isSelected: boolean;
+}
+
 export interface ScannerSettings {
   colmapServerUrl: string;
+  aiServerUrl: string;
   autoCapture: boolean;
   motionSensitivity: number; // 1 (sensitive) to 5 (strict)
   hapticFeedback: boolean;
-  minCoveragePercent: number; // default 100% (or 75% for quick scans)
+  minCoveragePercent: number;
   useColmapBackend: boolean;
+  useAi3dBackend: boolean;
+  preferredModel: 'trellis' | 'hunyuan3d' | 'instantmesh' | 'sf3d' | 'auto';
+  candidateCount: number;
   supabaseUrl: string;
   supabaseAnonKey: string;
   productShape?: ProductShape;
@@ -75,5 +135,9 @@ export interface ReconstructionJob {
   vertexCount?: number;
   triangleCount?: number;
   fileSizeMb?: number;
+  matchScore?: number; // Overall probability match %
+  sideConfidences?: SideConfidence[];
+  candidateEvaluations?: CandidateEvaluation[];
+  modelName?: string;
   error?: string;
 }
