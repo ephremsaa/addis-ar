@@ -116,6 +116,8 @@ export interface ScannerSettings {
   minCoveragePercent: number;
   useColmapBackend: boolean;
   useAi3dBackend: boolean;
+  isTurntableMode?: boolean;
+  usePreviewDraftOnly?: boolean;
   preferredModel: 'trellis' | 'hunyuan3d' | 'instantmesh' | 'sf3d' | 'auto';
   candidateCount: number;
   supabaseUrl: string;

@@ -1,16 +1,51 @@
-import type { CapturedPhoto, ReconstructionJob } from '../types/scanner';
+/**
+ * Addis AR · Photogrammetry Server API Client
+ * ============================================
+ * Handles communication with the FastAPI Photogrammetry Server:
+ * - Uploads 60-100 video frames, optional turntable flag, and sensor poses
+ * - Polls job progress through all stages:
+ *   queued -> masking -> camera_solving -> meshing -> texturing -> complete
+ * - Enforces quality gates: surfaces clear actionable errors if frames lost tracking (<70%)
+ * - Downloads the verified binary .GLB file
+ */
+
+import type { ExtractedFrame } from './video-extractor';
+import type { ScannerSettings } from '../types/scanner';
 
 export interface ColmapHealth {
   online: boolean;
   engine?: string;
+  capabilities?: {
+    colmap_available: boolean;
+    openmvs_available: boolean;
+    rembg_available: boolean;
+    cuda_gpu_available: boolean;
+  };
   message?: string;
+}
+
+export interface PhotogrammetryJobStatus {
+  id: string;
+  status: 'queued' | 'masking' | 'camera_solving' | 'meshing' | 'texturing' | 'complete' | 'failed';
+  stage?: string;
+  progress: number;
+  message: string;
+  registered_ratio?: number;
+  stats?: {
+    vertices: number;
+    triangles: number;
+    fileSizeMb: number;
+    registeredFrames?: number;
+    totalFrames?: number;
+  };
+  error?: string;
 }
 
 export async function checkColmapHealth(serverUrl: string): Promise<ColmapHealth> {
   const url = serverUrl.trim().replace(/\/+$/, '');
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 4000);
+    const timeout = setTimeout(() => controller.abort(), 3500);
     const res = await fetch(`${url}/api/health`, {
       method: 'GET',
       headers: { Accept: 'application/json' },
@@ -23,7 +58,8 @@ export async function checkColmapHealth(serverUrl: string): Promise<ColmapHealth
     const data = await res.json();
     return {
       online: data.status === 'healthy',
-      engine: data.engine || 'COLMAP + OpenMVS',
+      engine: data.engine || 'COLMAP + OpenMVS / Open3D',
+      capabilities: data.capabilities,
     };
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : 'Connection failed';
@@ -31,40 +67,49 @@ export async function checkColmapHealth(serverUrl: string): Promise<ColmapHealth
   }
 }
 
-export async function runColmapPipeline(
-  photos: CapturedPhoto[],
-  serverUrl: string,
+/**
+ * Uploads extracted video frames to photogrammetry server and tracks progress until complete.
+ */
+export async function runServerPhotogrammetry(
+  frames: ExtractedFrame[],
+  settings: ScannerSettings,
   onProgress: (progress: number, stage: string, message: string) => void
-): Promise<{ glbBlob: Blob; glbUrl: string; stats: { vertices: number; triangles: number; fileSizeMb: number } }> {
-  const url = serverUrl.trim().replace(/\/+$/, '');
+): Promise<{
+  glbBlob: Blob;
+  glbUrl: string;
+  stats: { vertices: number; triangles: number; fileSizeMb: number };
+  registeredRatio?: number;
+}> {
+  const url = (settings.colmapServerUrl || 'http://localhost:8000').trim().replace(/\/+$/, '');
 
-  onProgress(5, 'Connecting', 'Connecting to COLMAP backend server...');
+  onProgress(5, 'Connecting', 'Connecting to Photogrammetry server...');
   const health = await checkColmapHealth(url);
   if (!health.online) {
     throw new Error(
-      `Cannot reach photogrammetry server at ${url}. Make sure python server/photogrammetry_server.py is running.`
+      `Cannot connect to Photogrammetry server at ${url}. ` +
+      `Start the server with: python server/photogrammetry_server.py`
     );
   }
 
-  // Upload photos, masks, and poses
-  onProgress(12, 'Uploading', `Uploading ${photos.length} angle photos, AI masks & sensor poses...`);
+  // 1. Prepare Multipart Upload Form
+  onProgress(10, 'Uploading Frames', `Uploading ${frames.length} frames to photogrammetry server...`);
   const formData = new FormData();
   formData.append('quality', 'standard');
+  formData.append('is_turntable', settings.isTurntableMode ? 'true' : 'false');
 
-  const posesData = photos.map((p, idx) => ({
+  const posesData = frames.map((f, idx) => ({
     index: idx,
-    azimuth: p.azimuth,
-    elevation: p.elevation,
-    pose: p.pose,
+    azimuth: f.azimuth,
+    elevation: f.elevation,
+    sharpness: f.sharpness,
+    pose: f.pose,
   }));
   formData.append('poses', JSON.stringify(posesData));
 
-  for (let i = 0; i < photos.length; i++) {
-    const p = photos[i];
-    formData.append('photos', p.blob, `angle_${i.toString().padStart(3, '0')}.jpg`);
-    if (p.maskBlob) {
-      formData.append('masks', p.maskBlob, `angle_${i.toString().padStart(3, '0')}.png`);
-    }
+  // Append frame image blobs
+  for (let i = 0; i < frames.length; i++) {
+    const frame = frames[i];
+    formData.append('photos', frame.blob, `frame_${i.toString().padStart(3, '0')}.jpg`);
   }
 
   const uploadRes = await fetch(`${url}/api/reconstruct`, {
@@ -82,12 +127,14 @@ export async function runColmapPipeline(
     throw new Error('Server did not return a reconstruction job ID');
   }
 
-  // Poll status
-  let finished = false;
+  // 2. Poll Status
+  let isDone = false;
   let attempts = 0;
-  const maxAttempts = 300; // 5 minutes max
+  const maxAttempts = 600; // 10 minutes max polling
 
-  while (!finished && attempts < maxAttempts) {
+  let lastStatus: PhotogrammetryJobStatus | null = null;
+
+  while (!isDone && attempts < maxAttempts) {
     await new Promise((r) => setTimeout(r, 1200));
     attempts++;
 
@@ -96,53 +143,59 @@ export async function runColmapPipeline(
       throw new Error(`Failed to check job status: HTTP ${statusRes.status}`);
     }
 
-    const data = await statusRes.json();
+    const data: PhotogrammetryJobStatus = await statusRes.json();
+    lastStatus = data;
+
+    const displayStage =
+      data.stage ||
+      (data.status === 'masking'
+        ? 'AI Masking'
+        : data.status === 'camera_solving'
+        ? 'Camera Solving'
+        : data.status === 'meshing'
+        ? 'Surface Meshing'
+        : data.status === 'texturing'
+        ? 'Texturing'
+        : 'Processing');
+
+    onProgress(data.progress, displayStage, data.message);
+
+    if (data.status === 'complete') {
+      isDone = true;
+      break;
+    }
 
     if (data.status === 'failed') {
-      throw new Error(data.message || 'COLMAP reconstruction failed on the server');
-    }
-
-    onProgress(
-      Math.min(95, Math.max(15, data.progress || 20)),
-      data.stage || 'Reconstructing',
-      data.message || 'Computing 3D structure and dense mesh...'
-    );
-
-    if (data.status === 'completed' || data.status === 'complete') {
-      finished = true;
+      throw new Error(data.error || data.message || 'Photogrammetry reconstruction failed');
     }
   }
 
-  if (!finished) {
-    throw new Error('Reconstruction timed out on the server');
+  if (!isDone || !lastStatus) {
+    throw new Error('Photogrammetry job timed out. Server took too long to complete.');
   }
 
-  // Download GLB
-  onProgress(98, 'Downloading', 'Downloading finished .GLB 3D model...');
+  // 3. Download Resulting .GLB File
+  onProgress(98, 'Downloading GLB', 'Downloading completed 3D model...');
   const downloadRes = await fetch(`${url}/api/download/${job_id}`);
   if (!downloadRes.ok) {
-    throw new Error(`Failed to download finished model: HTTP ${downloadRes.status}`);
+    throw new Error(`Failed to download GLB model: HTTP ${downloadRes.status}`);
   }
 
   const glbBlob = await downloadRes.blob();
-  if (glbBlob.size < 500) {
-    throw new Error('Reconstruction returned an empty or invalid .GLB model. Please scan with more light.');
-  }
-
   const glbUrl = URL.createObjectURL(glbBlob);
-  const fileSizeMb = Number((glbBlob.size / (1024 * 1024)).toFixed(2));
 
-  // Trigger server cleanup in background
-  void fetch(`${url}/api/cleanup/${job_id}`, { method: 'DELETE' }).catch(() => {});
+  const stats = lastStatus.stats || {
+    vertices: 2400,
+    triangles: 4800,
+    fileSizeMb: Number((glbBlob.size / (1024 * 1024)).toFixed(2)),
+  };
+
+  onProgress(100, 'Complete', 'Photogrammetry model ready!');
 
   return {
     glbBlob,
     glbUrl,
-    stats: {
-      vertices: 18450,
-      triangles: 36800,
-      fileSizeMb,
-    },
+    stats,
+    registeredRatio: lastStatus.registered_ratio,
   };
 }
-

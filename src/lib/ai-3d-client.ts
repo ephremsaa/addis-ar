@@ -142,3 +142,4 @@ export async function sendScanRatingToBackend(
     // Non-blocking
   }
 }
+

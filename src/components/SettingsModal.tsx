@@ -4,12 +4,14 @@ import {
   Server,
   Sparkles,
   SlidersHorizontal,
+  Disc3,
+  Layers,
   Database,
   Smartphone,
-  Cpu,
   CheckCircle2,
+  AlertCircle,
 } from 'lucide-react';
-import { checkAiServerHealth } from '../lib/ai-3d-client';
+import { checkColmapHealth } from '../lib/colmap-client';
 import type { ScannerSettings } from '../types/scanner';
 
 interface SettingsModalProps {
@@ -31,17 +33,20 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
 
   if (!isOpen) return null;
 
-  const handleTestAiServer = async () => {
+  const handleTestServer = async () => {
     setIsTesting(true);
     setTestResult(null);
-    const ok = await checkAiServerHealth(formData.aiServerUrl);
+    const health = await checkColmapHealth(formData.colmapServerUrl);
     setIsTesting(false);
-    if (ok) {
-      setTestResult({ ok: true, message: 'Connected to GPU AI 3D Server! (Online)' });
+    if (health.online) {
+      setTestResult({
+        ok: true,
+        message: `Connected! Engine: ${health.engine}`,
+      });
     } else {
       setTestResult({
         ok: false,
-        message: 'Cannot reach server · Will use On-Device Neural Engine',
+        message: health.message || 'Cannot reach server',
       });
     }
   };
@@ -58,7 +63,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
         <div className="flex items-center justify-between border-b border-white/10 pb-3">
           <div className="flex items-center gap-2">
             <SlidersHorizontal className="w-5 h-5 text-cyan-400" />
-            <h2 className="text-sm font-bold text-white tracking-tight">Studio & AI Settings</h2>
+            <h2 className="text-sm font-bold text-white tracking-tight">Studio & Photogrammetry</h2>
           </div>
           <button
             onClick={onClose}
@@ -68,56 +73,18 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           </button>
         </div>
 
-        {/* 1. Multi-View AI 3D Model Selection */}
-        <div className="flex flex-col gap-2">
-          <label className="text-xs font-semibold text-slate-300">Multi-View 3D Model</label>
-          <div className="grid grid-cols-2 gap-2">
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, preferredModel: 'trellis' })}
-              className={`p-2.5 rounded-2xl border text-left text-xs transition-all ${
-                formData.preferredModel === 'trellis'
-                  ? 'border-cyan-400/80 bg-cyan-500/20 text-cyan-200 font-bold shadow-[0_0_12px_rgba(34,211,238,0.25)]'
-                  : 'border-white/10 bg-slate-900/60 text-slate-400'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Sparkles className="w-3.5 h-3.5 text-cyan-400" />
-                <span>TRELLIS</span>
-              </div>
-              <span className="text-[10px] text-slate-400 block mt-0.5">High Fidelity · MIT</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setFormData({ ...formData, preferredModel: 'hunyuan3d' })}
-              className={`p-2.5 rounded-2xl border text-left text-xs transition-all ${
-                formData.preferredModel === 'hunyuan3d'
-                  ? 'border-emerald-400/80 bg-emerald-500/20 text-emerald-200 font-bold shadow-[0_0_12px_rgba(16,185,129,0.25)]'
-                  : 'border-white/10 bg-slate-900/60 text-slate-400'
-              }`}
-            >
-              <div className="flex items-center gap-1.5">
-                <Cpu className="w-3.5 h-3.5 text-emerald-400" />
-                <span>Hunyuan3D-2</span>
-              </div>
-              <span className="text-[10px] text-slate-400 block mt-0.5">Texture Synthesis</span>
-            </button>
-          </div>
-        </div>
-
-        {/* 2. Python FastAPI GPU Server URL */}
+        {/* 1. Photogrammetry Server URL */}
         <div className="flex flex-col gap-1.5 bg-slate-900/60 p-3.5 rounded-2xl border border-white/10">
           <div className="flex items-center justify-between">
-            <label className="text-[11px] font-semibold text-slate-300">GPU AI Server URL</label>
-            <span className="text-[9px] text-cyan-400">Modal / RunPod / Local</span>
+            <label className="text-[11px] font-semibold text-slate-300">COLMAP Server URL</label>
+            <span className="text-[9px] text-cyan-400 font-mono">Modal / RunPod / Local</span>
           </div>
           <div className="flex gap-2">
             <input
               type="text"
-              value={formData.aiServerUrl}
+              value={formData.colmapServerUrl}
               onChange={(e) => {
-                setFormData({ ...formData, aiServerUrl: e.target.value });
+                setFormData({ ...formData, colmapServerUrl: e.target.value });
                 setTestResult(null);
               }}
               placeholder="http://localhost:8000"
@@ -125,7 +92,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
             />
             <button
               type="button"
-              onClick={handleTestAiServer}
+              onClick={handleTestServer}
               disabled={isTesting}
               className="px-3.5 py-1.5 rounded-xl bg-cyan-400 text-slate-950 text-xs font-bold shrink-0 disabled:opacity-50"
             >
@@ -135,7 +102,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           {testResult && (
             <p
               className={`text-[10px] font-medium mt-1 ${
-                testResult.ok ? 'text-emerald-400' : 'text-amber-400'
+                testResult.ok ? 'text-emerald-400' : 'text-rose-400'
               }`}
             >
               {testResult.message}
@@ -143,72 +110,81 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({
           )}
         </div>
 
-        {/* 3. Number of Candidate Generations */}
-        <div className="flex items-center justify-between py-1">
-          <div>
-            <span className="text-xs font-semibold text-slate-200 block">Candidate Predictions</span>
-            <span className="text-[10px] text-slate-400">Runs multiple seeds & picks highest match</span>
+        {/* 2. Turntable Mode Toggle */}
+        <div
+          onClick={() => setFormData({ ...formData, isTurntableMode: !formData.isTurntableMode })}
+          className="flex items-center justify-between cursor-pointer p-3 rounded-2xl bg-slate-900/40 border border-white/10"
+        >
+          <div className="flex items-center gap-2.5">
+            <Disc3 className={`w-5 h-5 ${formData.isTurntableMode ? 'text-amber-400' : 'text-slate-400'}`} />
+            <div>
+              <span className="text-xs font-semibold text-slate-200 block">Turntable Mode</span>
+              <span className="text-[10px] text-slate-400">Rotating plate with fixed phone stand</span>
+            </div>
           </div>
-          <div className="flex items-center gap-1 bg-black/40 p-1 rounded-xl border border-white/10">
-            {[3, 4].map((cnt) => (
-              <button
-                key={cnt}
-                type="button"
-                onClick={() => setFormData({ ...formData, candidateCount: cnt })}
-                className={`px-2.5 py-1 rounded-lg text-xs font-bold ${
-                  formData.candidateCount === cnt
-                    ? 'bg-cyan-400 text-slate-950 shadow'
-                    : 'text-slate-400 hover:text-white'
-                }`}
-              >
-                {cnt}x
-              </button>
-            ))}
+          <div
+            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
+              formData.isTurntableMode ? 'bg-amber-500' : 'bg-slate-700'
+            }`}
+          >
+            <div
+              className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                formData.isTurntableMode ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
           </div>
         </div>
 
-        {/* 4. Auto-Capture & Haptic Switches */}
-        <div className="flex flex-col gap-3 py-1 border-t border-white/10 pt-3">
-          <div
-            onClick={() => setFormData({ ...formData, autoCapture: !formData.autoCapture })}
-            className="flex items-center justify-between cursor-pointer"
-          >
+        {/* 3. On-Device Draft Preview Mode (Kept clearly labeled) */}
+        <div
+          onClick={() =>
+            setFormData({ ...formData, usePreviewDraftOnly: !formData.usePreviewDraftOnly })
+          }
+          className="flex items-center justify-between cursor-pointer p-3 rounded-2xl bg-slate-900/40 border border-white/10"
+        >
+          <div className="flex items-center gap-2.5">
+            <Layers
+              className={`w-5 h-5 ${formData.usePreviewDraftOnly ? 'text-cyan-400' : 'text-slate-400'}`}
+            />
             <div>
-              <span className="text-xs font-semibold text-slate-200 block">Auto-Capture Steady Angles</span>
-              <span className="text-[10px] text-slate-400">Captures when phone matches angle</span>
-            </div>
-            <div
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-                formData.autoCapture ? 'bg-emerald-500' : 'bg-slate-700'
-              }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                  formData.autoCapture ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
+              <span className="text-xs font-semibold text-slate-200 block">
+                ⚡ On-Device Draft Preview
+              </span>
+              <span className="text-[10px] text-slate-400">
+                Fast low-quality preview without server
+              </span>
             </div>
           </div>
+          <div
+            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
+              formData.usePreviewDraftOnly ? 'bg-cyan-500' : 'bg-slate-700'
+            }`}
+          >
+            <div
+              className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                formData.usePreviewDraftOnly ? 'translate-x-5' : 'translate-x-0'
+              }`}
+            />
+          </div>
+        </div>
 
+        {/* 4. Haptic Feedback */}
+        <div className="flex items-center justify-between py-1 border-t border-white/10 pt-3">
+          <div>
+            <span className="text-xs font-semibold text-slate-200 block">Haptic Vibration</span>
+            <span className="text-[10px] text-slate-400">Tactile buzz on angle sector coverage</span>
+          </div>
           <div
             onClick={() => setFormData({ ...formData, hapticFeedback: !formData.hapticFeedback })}
-            className="flex items-center justify-between cursor-pointer"
+            className={`w-11 h-6 rounded-full transition-colors relative p-0.5 cursor-pointer ${
+              formData.hapticFeedback ? 'bg-emerald-500' : 'bg-slate-700'
+            }`}
           >
-            <div>
-              <span className="text-xs font-semibold text-slate-200 block">Haptic Vibration on Angle</span>
-              <span className="text-[10px] text-slate-400">Tactile pulse for each captured angle</span>
-            </div>
             <div
-              className={`w-11 h-6 rounded-full transition-colors relative p-0.5 ${
-                formData.hapticFeedback ? 'bg-emerald-500' : 'bg-slate-700'
+              className={`w-5 h-5 rounded-full bg-white transition-transform ${
+                formData.hapticFeedback ? 'translate-x-5' : 'translate-x-0'
               }`}
-            >
-              <div
-                className={`w-5 h-5 rounded-full bg-white transition-transform ${
-                  formData.hapticFeedback ? 'translate-x-5' : 'translate-x-0'
-                }`}
-              />
-            </div>
+            />
           </div>
         </div>
 

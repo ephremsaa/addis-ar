@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { CameraScanner } from './components/CameraScanner';
-import { ProcessingScreen } from './components/ProcessingScreen';
+import { ProcessingScreen, type PhotogrammetryResult } from './components/ProcessingScreen';
 import { ModelViewer3D } from './components/ModelViewer3D';
 import { SettingsModal } from './components/SettingsModal';
-import type { Ai3DGenerationResult } from './lib/ai-3d-client';
-import type { CapturedPhoto, ScannerSettings, ProductShape } from './types/scanner';
+import { getLastStoredModel } from './lib/model-storage';
+import type { ExtractedFrame } from './lib/video-extractor';
+import type { ScannerSettings, ProductShape } from './types/scanner';
 
 const DEFAULT_SETTINGS: ScannerSettings = {
   colmapServerUrl: 'http://localhost:8000',
@@ -13,8 +14,10 @@ const DEFAULT_SETTINGS: ScannerSettings = {
   motionSensitivity: 2,
   hapticFeedback: true,
   minCoveragePercent: 100,
-  useColmapBackend: false,
-  useAi3dBackend: true,
+  useColmapBackend: true, // Primary: Real server photogrammetry
+  useAi3dBackend: false,
+  isTurntableMode: false,
+  usePreviewDraftOnly: false,
   preferredModel: 'trellis',
   candidateCount: 4,
   supabaseUrl: '',
@@ -23,9 +26,9 @@ const DEFAULT_SETTINGS: ScannerSettings = {
 
 export const App: React.FC = () => {
   const [currentScreen, setCurrentScreen] = useState<'camera' | 'processing' | 'viewer'>('camera');
-  const [capturedPhotos, setCapturedPhotos] = useState<CapturedPhoto[]>([]);
-  const [selectedShape, setSelectedShape] = useState<ProductShape>('auto');
-  const [generationResult, setGenerationResult] = useState<Ai3DGenerationResult | null>(null);
+  const [recordedFrames, setRecordedFrames] = useState<ExtractedFrame[]>([]);
+  const [isTurntableScan, setIsTurntableScan] = useState(false);
+  const [activeModel, setActiveModel] = useState<PhotogrammetryResult | null>(null);
 
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [settings, setSettings] = useState<ScannerSettings>(() => {
@@ -37,6 +40,23 @@ export const App: React.FC = () => {
     }
   });
 
+  // On initial mount, check if there's a cached model from IndexedDB
+  useEffect(() => {
+    async function restoreCachedModel() {
+      const last = await getLastStoredModel();
+      if (last && last.blob) {
+        const url = URL.createObjectURL(last.blob);
+        setActiveModel({
+          glbBlob: last.blob,
+          glbUrl: url,
+          stats: last.stats,
+          isDraftPreview: false,
+        });
+      }
+    }
+    restoreCachedModel();
+  }, []);
+
   const handleSaveSettings = (newSettings: ScannerSettings) => {
     setSettings(newSettings);
     try {
@@ -46,46 +66,32 @@ export const App: React.FC = () => {
     }
   };
 
-  const handleFinishScan = (photos: CapturedPhoto[], shape: ProductShape = 'auto') => {
-    if (photos.length < 3) return;
-    setCapturedPhotos(photos);
-    setSelectedShape(shape);
+  const handleFinishRecording = (
+    frames: ExtractedFrame[],
+    shape: ProductShape = 'auto',
+    isTurntable: boolean = false
+  ) => {
+    if (frames.length < 10) return;
+    setRecordedFrames(frames);
+    setIsTurntableScan(isTurntable);
     setCurrentScreen('processing');
   };
 
-  const handleProcessingSuccess = (result: Ai3DGenerationResult) => {
-    setGenerationResult(result);
+  const handleProcessingSuccess = (result: PhotogrammetryResult) => {
+    setActiveModel(result);
     setCurrentScreen('viewer');
   };
 
   const handleRescan = () => {
-    if (generationResult?.glbUrl) {
-      URL.revokeObjectURL(generationResult.glbUrl);
-    }
-    setGenerationResult(null);
-    setCapturedPhotos([]);
+    setRecordedFrames([]);
     setCurrentScreen('camera');
-  };
-
-  const handleRetakeAngle = (slotId: string) => {
-    // Switch to camera with intent to retake specific angle
-    setCurrentScreen('camera');
-  };
-
-  const handleReconstructWithUpdatedPhotos = (updatedPhotos: CapturedPhoto[]) => {
-    if (generationResult?.glbUrl) {
-      URL.revokeObjectURL(generationResult.glbUrl);
-    }
-    setGenerationResult(null);
-    setCapturedPhotos(updatedPhotos);
-    setCurrentScreen('processing');
   };
 
   return (
     <div className="w-full h-full bg-[#090d16] text-white overflow-hidden relative font-sans">
       {currentScreen === 'camera' && (
         <CameraScanner
-          onFinishScan={handleFinishScan}
+          onFinishRecording={handleFinishRecording}
           onOpenSettings={() => setIsSettingsOpen(true)}
           settings={settings}
         />
@@ -93,26 +99,22 @@ export const App: React.FC = () => {
 
       {currentScreen === 'processing' && (
         <ProcessingScreen
-          photos={capturedPhotos}
+          frames={recordedFrames}
           settings={settings}
-          shape={selectedShape}
+          isTurntable={isTurntableScan}
           onSuccess={handleProcessingSuccess}
           onRetry={handleRescan}
         />
       )}
 
-      {currentScreen === 'viewer' && generationResult && (
+      {currentScreen === 'viewer' && activeModel && (
         <ModelViewer3D
-          glbUrl={generationResult.glbUrl}
-          glbBlob={generationResult.glbBlob}
-          photos={capturedPhotos}
-          matchScore={generationResult.matchScore}
-          sideConfidences={generationResult.sideConfidences}
-          modelName={generationResult.modelName}
-          stats={generationResult.stats}
+          glbUrl={activeModel.glbUrl}
+          glbBlob={activeModel.glbBlob}
+          stats={activeModel.stats}
+          registeredRatio={activeModel.registeredRatio}
+          isDraftPreview={activeModel.isDraftPreview}
           onRescan={handleRescan}
-          onRetakeAngle={handleRetakeAngle}
-          onReconstructWithUpdatedPhotos={handleReconstructWithUpdatedPhotos}
         />
       )}
 

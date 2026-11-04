@@ -39,3 +39,4 @@ image = (
 def fastapi_app():
     from ai_3d_server import app as web_app
     return web_app
+
