@@ -221,8 +221,8 @@ export function getCoverageStats(sectors: AngleSector[]) {
 
 export function getMissingAnglesGuidance(
   sectors: AngleSector[],
-  currentAzimuth: number,
-  currentElevation: number
+  _currentAzimuth: number,
+  _currentElevation: number
 ): string {
   const uncovered = sectors.filter((s) => !s.isCovered);
   if (uncovered.length === 0) {

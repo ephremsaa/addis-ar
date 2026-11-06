@@ -1,15 +1,9 @@
 import React, { useState } from 'react';
 import {
   X,
-  Server,
-  Sparkles,
   SlidersHorizontal,
   Disc3,
   Layers,
-  Database,
-  Smartphone,
-  CheckCircle2,
-  AlertCircle,
 } from 'lucide-react';
 import { checkColmapHealth } from '../lib/colmap-client';
 import type { ScannerSettings } from '../types/scanner';

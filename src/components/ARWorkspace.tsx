@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, RotateCw, Video, AlertCircle } from 'lucide-react';
+import { RotateCw, Video, AlertCircle } from 'lucide-react';
 
 export interface ARWorkspaceProps {
   onCaptureFrame?: (canvas: HTMLCanvasElement) => void;
@@ -11,7 +11,7 @@ export interface ARWorkspaceProps {
  * Implements toggleFacingMode (replacing deprecated switchFacing)
  * and switchCamera(deviceId) (replacing deprecated selectDevice).
  */
-export const ARWorkspace: React.FC<ARWorkspaceProps> = ({ onCaptureFrame, children }) => {
+export const ARWorkspace: React.FC<ARWorkspaceProps> = ({ onCaptureFrame: _onCaptureFrame, children }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [facingMode, setFacingMode] = useState<'environment' | 'user'>('environment');
@@ -150,3 +150,4 @@ export const ARWorkspace: React.FC<ARWorkspaceProps> = ({ onCaptureFrame, childr
 };
 
 export default ARWorkspace;
+

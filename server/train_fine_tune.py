@@ -15,17 +15,24 @@ import sys
 import json
 import argparse
 import urllib.request
-from typing import List, Tuple
+from typing import List, Tuple, Any
 
 try:
-    import torch
-    import torch.nn as nn
-    import torch.optim as optim
-    from torch.utils.data import Dataset, DataLoader
-    from PIL import Image
-    import numpy as np
+    import torch  # type: ignore
+    import torch.nn as nn  # type: ignore
+    import torch.optim as optim  # type: ignore
+    from torch.utils.data import Dataset, DataLoader  # type: ignore
+    from PIL import Image  # type: ignore
+    import numpy as np  # type: ignore
     TORCH_AVAILABLE = True
 except ImportError:
+    torch: Any = None
+    nn: Any = None
+    optim: Any = None
+    Dataset: Any = object
+    DataLoader: Any = None
+    Image: Any = None
+    np: Any = None
     TORCH_AVAILABLE = False
 
 
@@ -49,6 +56,8 @@ class AddisSegmentationDataset:
         return len(self.samples)
 
     def __getitem__(self, idx):
+        if Image is None or np is None or torch is None:
+            raise RuntimeError("Required ML packages not installed.")
         img_path, mask_path = self.samples[idx]
         img = Image.open(img_path).convert("RGB").resize((320, 320))
         mask = Image.open(mask_path).convert("L").resize((320, 320))
@@ -72,7 +81,7 @@ def download_dataset_from_supabase(supabase_url: str, supabase_key: str, dest_di
 
 
 def fine_tune_model(args):
-    if not TORCH_AVAILABLE:
+    if not TORCH_AVAILABLE or torch is None or DataLoader is None or nn is None or optim is None:
         print("[!] PyTorch is not yet installed in this environment.")
         print("    Install requirements with: pip install torch torchvision Pillow numpy")
         print("    The training dataset structure is ready for fine-tuning.")
@@ -93,7 +102,7 @@ def fine_tune_model(args):
     print(f"[*] Loaded {len(dataset)} training samples.")
 
     # Lightweight UNet model for rapid edge fine-tuning
-    class SimpleUNet(nn.Module):
+    class SimpleUNet(nn.Module):  # type: ignore
         def __init__(self):
             super().__init__()
             self.enc1 = nn.Sequential(nn.Conv2d(3, 32, 3, padding=1), nn.ReLU(), nn.MaxPool2d(2))

@@ -27,13 +27,13 @@ import logging
 from io import BytesIO
 from typing import List, Dict, Any, Optional
 
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel
-import uvicorn
-import numpy as np
-from PIL import Image
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException  # type: ignore
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+from fastapi.responses import FileResponse, JSONResponse  # type: ignore
+from pydantic import BaseModel  # type: ignore
+import uvicorn  # type: ignore
+import numpy as np  # type: ignore
+from PIL import Image  # type: ignore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("addis_ar_ai_3d")
@@ -197,7 +197,7 @@ class HybridNeuralProvider(Base3DModelProvider):
 
         # Construct convex hull / surface triangulation
         try:
-            from scipy.spatial import ConvexHull
+            from scipy.spatial import ConvexHull  # type: ignore
             hull = ConvexHull(verts)
             faces = hull.simplices
             verts = verts[hull.vertices]

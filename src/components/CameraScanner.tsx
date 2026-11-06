@@ -1,23 +1,15 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   RotateCw,
   Zap,
   ZapOff,
   Sliders,
-  CheckCircle2,
   Sparkles,
   RotateCcw,
-  Target,
   Wand2,
   Disc3,
-  Video,
-  Play,
   Square,
   ArrowRight,
-  Layers,
-  ArrowUp,
-  ArrowDown,
-  AlertTriangle,
 } from 'lucide-react';
 import { AngleCoverageRing } from './AngleCoverageRing';
 import { sensorTracker, type OrientationState } from '../lib/sensor-tracker';
@@ -83,7 +75,7 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     aspectRatio: 0.85,
   });
 
-  const [qualityReport, setQualityReport] = useState<ImageQualityReport>({
+  const [_qualityReport, setQualityReport] = useState<ImageQualityReport>({
     isSharp: true,
     sharpness: 50,
     isTooDark: false,
@@ -98,7 +90,6 @@ export const CameraScanner: React.FC<CameraScannerProps> = ({
     100,
     Math.round((coveredSectorIds.size / TOTAL_COVERAGE_SECTORS) * 100)
   );
-  const isFullCoverage = coveredSectorIds.size >= 22 && recordSeconds >= 18;
 
   // 1. Initialize Camera
   useEffect(() => {

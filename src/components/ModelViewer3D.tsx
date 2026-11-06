@@ -8,7 +8,6 @@ import {
   Loader2,
   Sparkles,
   Box,
-  Share2,
   AlertOctagon,
   Layers,
 } from 'lucide-react';

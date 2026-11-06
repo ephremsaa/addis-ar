@@ -39,7 +39,7 @@ export interface ClientReconstructionResult {
 export async function reconstructFromPhotosClient(
   photos: CapturedPhoto[],
   onProgress?: (progress: number, message: string) => void,
-  shape: ProductShape = 'auto'
+  _shape: ProductShape = 'auto'
 ): Promise<ClientReconstructionResult> {
   if (photos.length < 3) {
     throw new Error('At least 3 multi-angle photos are required for 3D reconstruction.');

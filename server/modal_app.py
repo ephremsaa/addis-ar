@@ -10,7 +10,7 @@ Features:
 - Supports TRELLIS, Hunyuan3D-2, and InstantMesh multi-view inference
 """
 
-import modal
+import modal  # type: ignore
 
 app = modal.App("addis-ar-ai-3d")
 

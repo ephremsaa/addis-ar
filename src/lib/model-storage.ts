@@ -141,3 +141,4 @@ export async function downloadGlbReliably(blob: Blob, filename = 'scanned_model.
     URL.revokeObjectURL(url);
   }, 1500);
 }
+

@@ -34,8 +34,8 @@ export interface ExtractedFrame {
  */
 export function computeLaplacianVariance(
   ctx: CanvasRenderingContext2D,
-  width: number,
-  height: number
+  _width?: number,
+  _height?: number
 ): { variance: number; brightness: number } {
   // Downsample to 160x120 for fast calculation
   const sw = 160;
@@ -268,7 +268,7 @@ export async function extractFramesFromVideo(
       }
     };
 
-    video.onerror = (e) => reject(new Error('Failed to load recorded video for frame extraction.'));
+    video.onerror = (_e) => reject(new Error('Failed to load recorded video for frame extraction.'));
   });
 }
 
@@ -282,3 +282,4 @@ function seekToTime(video: HTMLVideoElement, time: number): Promise<void> {
     video.currentTime = time;
   });
 }
+

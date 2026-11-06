@@ -207,7 +207,7 @@ export class AISegmenter {
     try {
       // 2. Execute AI Background Removal model
       const aiBlob = await removeBackground(srcCanvas, {
-        progress: (key, current, total) => {
+        progress: (_key, _current, _total) => {
           // optional progress callback
         },
       });

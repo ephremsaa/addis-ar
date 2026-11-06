@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Loader2, AlertCircle, RefreshCw, Layers, CheckCircle2, Cpu, Sparkles, Box, Server } from 'lucide-react';
+import { Loader2, AlertCircle, RefreshCw, CheckCircle2, Sparkles, Server } from 'lucide-react';
 import { runServerPhotogrammetry } from '../lib/colmap-client';
 import { reconstructFromPhotosClient } from '../lib/client-reconstructor';
 import type { ExtractedFrame } from '../lib/video-extractor';

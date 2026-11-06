@@ -29,12 +29,12 @@ import subprocess
 import platform
 import logging
 from typing import List, Optional, Dict, Any
-from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse, JSONResponse
-import uvicorn
-import numpy as np
-from PIL import Image
+from fastapi import FastAPI, UploadFile, File, Form, BackgroundTasks, HTTPException  # type: ignore
+from fastapi.middleware.cors import CORSMiddleware  # type: ignore
+from fastapi.responses import FileResponse, JSONResponse  # type: ignore
+import uvicorn  # type: ignore
+import numpy as np  # type: ignore
+from PIL import Image  # type: ignore
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger("addis_ar_photogrammetry")
@@ -72,7 +72,7 @@ def get_system_capabilities():
 
     has_rembg = False
     try:
-        import rembg
+        import rembg  # type: ignore  # type: ignore
         has_rembg = True
     except ImportError:
         pass
@@ -140,7 +140,7 @@ def run_ai_masking_step(images_dir: str, masks_dir: str):
     image_files = sorted([f for f in os.listdir(images_dir) if f.lower().endswith(('.jpg', '.jpeg', '.png'))])
 
     try:
-        import rembg
+        import rembg  # type: ignore
         session = rembg.new_session("u2net")
         for img_name in image_files:
             img_path = os.path.join(images_dir, img_name)
@@ -365,8 +365,8 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str, is_turn
             jobs[job_id]["progress"] = 84
             jobs[job_id]["message"] = "Filtering outliers, removing table plane & building watertight Poisson surface..."
 
-            import open3d as o3d
-            import trimesh
+            import open3d as o3d  # type: ignore
+            import trimesh  # type: ignore  # type: ignore
 
             pcd = o3d.io.read_point_cloud(fused_ply)
             
@@ -427,7 +427,7 @@ def run_photogrammetry_pipeline(job_id: str, job_dir: str, quality: str, is_turn
         if not validate_glb_binary(output_glb):
             raise ValueError("Reconstructed GLB file failed binary glTF 2.0 validation.")
 
-        import trimesh
+        import trimesh  # type: ignore
         final_mesh = trimesh.load(output_glb)
         if isinstance(final_mesh, trimesh.Scene):
             final_mesh = final_mesh.dump(concatenate=True)

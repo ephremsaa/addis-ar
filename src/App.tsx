@@ -68,7 +68,7 @@ export const App: React.FC = () => {
 
   const handleFinishRecording = (
     frames: ExtractedFrame[],
-    shape: ProductShape = 'auto',
+    _shape: ProductShape = 'auto',
     isTurntable: boolean = false
   ) => {
     if (frames.length < 10) return;
